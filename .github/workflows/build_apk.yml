@@ -24,6 +24,15 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Build Web Assets
+        run: npm run build
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
       - name: Build APK
         run: cd android && gradle assembleDebug --stacktrace
 
