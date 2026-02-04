@@ -48,7 +48,12 @@ jobs:
           gradle-version: wrapper
 
       - name: Build Debug APK
-        run: cd android && ./gradlew assembleDebug --stacktrace
+        run: |
+          cd android
+          sudo apt-get update && sudo apt-get install -y dos2unix
+          dos2unix gradlew
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
       # 5. Upload
       - name: Upload APK
