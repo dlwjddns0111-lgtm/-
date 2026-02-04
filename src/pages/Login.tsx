@@ -6,6 +6,15 @@ import InstallPrompt from '../components/InstallPrompt';
 export default function LoginPage({ onLogin }: { onLogin: () => void }) {
     const [isLoading, setIsLoading] = useState(false);
 
+    // Initialize Kakao SDK
+    if (!window.Kakao?.isInitialized()) {
+        try {
+            window.Kakao?.init('c08198942354373e24f7f57c7a79b21b');
+        } catch (e) {
+            console.error('Failed to initialize Kakao SDK', e);
+        }
+    }
+
     const handleGoogleLogin = async () => {
         setIsLoading(true);
         try {
@@ -18,6 +27,44 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleKakaoLogin = () => {
+        if (!window.Kakao?.isInitialized()) {
+            alert('카카오 로그인을 초기화하는 중 오류가 발생했습니다.');
+            return;
+        }
+
+        setIsLoading(true);
+        window.Kakao.Auth.login({
+            success: function (authObj: any) {
+                window.Kakao.API.request({
+                    url: '/v2/user/me',
+                    success: function (res: any) {
+                        // Create a user object compatible with the app's auth system
+                        const user = {
+                            uid: `kakao:${res.id}`,
+                            email: res.kakao_account?.email || `kakao_${res.id}@payroll.app`,
+                            displayName: res.kakao_account?.profile?.nickname || 'Kakao User',
+                            photoURL: res.kakao_account?.profile?.thumbnail_image_url || '',
+                        };
+                        saveUser(user);
+                        onLogin();
+                        setIsLoading(false);
+                    },
+                    fail: function (error: any) {
+                        console.error(error);
+                        alert('카카오 사용자 정보를 가져오는데 실패했습니다.');
+                        setIsLoading(false);
+                    },
+                });
+            },
+            fail: function (err: any) {
+                console.error(err);
+                alert('카카오 로그인에 실패했습니다.');
+                setIsLoading(false);
+            },
+        });
     };
 
     return (
@@ -42,7 +89,7 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
                 </div>
 
                 {/* Login Button */}
-                <div className="w-full max-w-sm space-y-6">
+                <div className="w-full max-w-sm space-y-4">
                     <button
                         onClick={handleGoogleLogin}
                         disabled={isLoading}
@@ -58,7 +105,18 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
                         )}
                     </button>
 
-                    <p className="text-[12px] text-center text-black/40 font-black leading-tight">
+                    <button
+                        onClick={handleKakaoLogin}
+                        disabled={isLoading}
+                        className="neo-btn w-full flex items-center justify-center gap-4 bg-[#FEE500] py-5 text-xl text-[#000000] opacity-100"
+                    >
+                        <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current">
+                            <path d="M12 3C5.373 3 0 7.373 0 12.768c0 3.384 2.164 6.368 5.474 8.16-.275 1.018-1.002 3.693-1.144 4.254-.18.71.26.702.553.513.228-.146 3.635-2.464 4.29-2.91.603.088 1.226.134 1.827.134 6.627 0 12-4.373 12-9.768S16.627 3 12 3z" />
+                        </svg>
+                        <span className="font-black">카카오로 시작하기</span>
+                    </button>
+
+                    <p className="text-[12px] text-center text-black/40 font-black leading-tight mt-4">
                         로그인 시 <span className="underline cursor-pointer">이용약관</span> 및 <br />
                         <span className="underline cursor-pointer">개인정보처리방침</span>에 동의하게 됩니다.
                     </p>
@@ -71,4 +129,11 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
             <InstallPrompt />
         </div>
     );
+}
+
+// Add global type definition for Kakao
+declare global {
+    interface Window {
+        Kakao: any;
+    }
 }
