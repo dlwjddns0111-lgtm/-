@@ -22,7 +22,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'
 
       - name: Install Dependencies
         run: npm install
@@ -35,10 +35,7 @@ jobs:
 
       - name: Build APK
         run: |
-          sudo apt-get update
-          sudo apt-get install -y dos2unix
           cd android
-          dos2unix gradlew
           chmod +x gradlew
           ./gradlew assembleDebug -x lint --stacktrace
 
