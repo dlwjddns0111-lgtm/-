@@ -22,7 +22,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: Install Dependencies
         run: npm install
@@ -33,13 +33,8 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Make Gradlew Executable
-        run: chmod +x ./android/gradlew
-
       - name: Build APK
-        run: |
-          cd android
-          ./gradlew assembleDebug -x lint --stacktrace
+        run: cd android && gradle assembleDebug -x lint --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
