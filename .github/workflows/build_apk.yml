@@ -33,8 +33,13 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Make Gradlew Executable
+        run: chmod +x ./android/gradlew
+
       - name: Build APK
-        run: cd android && gradle assembleDebug --stacktrace
+        run: |
+          cd android
+          ./gradlew assembleDebug -x lint --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
