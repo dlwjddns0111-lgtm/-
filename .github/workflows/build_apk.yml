@@ -1,46 +1,53 @@
 name: Build Android APK
-
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+on: [push, workflow_dispatch]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Setup Java
+      # 1. Setup Java 21 (Required for Gradle 8.14+)
+      - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Install Dependencies
+      # 2. Setup Android SDK 36 (Explicitly required for this project)
+      # We assume standard Android tools are present, but we force install SDK 36
+      - name: Install Android SDK 36
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+
+      # 3. Build Web Assets
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      
+      - name: Install NPM Deps
         run: npm install
-
-      - name: Build Web Assets
+        
+      - name: Build Web
         run: npm run build
-
+        
       - name: Sync Capacitor
         run: npx cap sync android
 
+      # 4. Build APK using Official Gradle Action
+      # This handles wrapper validation, permissions, and caching automatically.
+      # It fixes the "Windows vs Linux" wrapper issue.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '8.5'
+          gradle-version: wrapper
 
-      - name: Build APK
-        run: cd android && gradle assembleDebug -x lint --stacktrace
+      - name: Build Debug APK
+        run: cd android && ./gradlew assembleDebug --stacktrace
 
+      # 5. Upload
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
