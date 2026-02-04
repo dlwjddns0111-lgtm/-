@@ -14,8 +14,11 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      # 2. Setup Android SDK 36 (Explicitly required for this project)
-      # We assume standard Android tools are present, but we force install SDK 36
+      # 2. Setup Android SDK Tools (Provides sdkmanager)
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # 3. Install Android SDK 36 (Explicitly required for this project)
       - name: Install Android SDK 36
         run: |
           yes | sdkmanager --licenses
