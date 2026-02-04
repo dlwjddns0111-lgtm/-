@@ -1,0 +1,83 @@
+/* Modern Components (Formerly Neo) */
+
+.neo-card {
+    background: var(--bg-white);
+    border: var(--border-width) solid var(--border-light);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-sm);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.neo-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.neo-btn {
+    background: var(--bg-white);
+    border: var(--border-width) solid var(--border-light);
+    border-radius: var(--border-radius-md);
+    padding: 10px 20px;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--fg-main);
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.neo-btn:hover {
+    background: #F9FAFB;
+    border-color: #D1D5DB;
+    box-shadow: var(--shadow-md);
+}
+
+.neo-btn:active {
+    transform: scale(0.98);
+}
+
+.neo-btn-primary {
+    background: var(--accent-blue);
+    color: white;
+    border-color: transparent;
+}
+
+.neo-btn-primary:hover {
+    background: #2563EB;
+}
+
+.neo-btn-pink {
+    background: var(--accent-pink);
+    color: white;
+    border-color: transparent;
+}
+
+.neo-input {
+    border: var(--border-width) solid var(--border-light);
+    border-radius: var(--border-radius-md);
+    padding: 10px 14px;
+    background: var(--bg-white);
+    font-weight: 400;
+    font-size: 14px;
+    color: var(--fg-main);
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.neo-input:focus {
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.neo-badge {
+    border-radius: 9999px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--pastel-blue);
+    color: var(--accent-blue);
+}

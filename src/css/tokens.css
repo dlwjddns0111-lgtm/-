@@ -1,0 +1,34 @@
+:root {
+    /* Modern SaaS Colors */
+    --bg-main: #F9FAFB;
+    --bg-white: #FFFFFF;
+    --fg-main: #111827;
+    --fg-muted: #4B5563;
+
+    --accent-blue: #3B82F6;
+    --accent-green: #10B981;
+    --accent-yellow: #F59E0B;
+    --accent-pink: #EC4899;
+    --accent-purple: #8B5CF6;
+
+    /* Subtle Pastel Backgrounds (like the image) */
+    --pastel-blue: #EFF6FF;
+    --pastel-green: #ECFDF5;
+    --pastel-yellow: #FFFBEB;
+    --pastel-pink: #FDF2F8;
+    --pastel-purple: #F5F3FF;
+
+    /* Borders */
+    --border-light: #E5E7EB;
+    --border-width: 1px;
+    --border-radius-md: 12px;
+    --border-radius-lg: 16px;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+    /* Spacing */
+    --space-unit: 8px;
+}
