@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getStaff, saveStaff, deleteStaff } from '../lib/storage';
+import { syncToCloud } from '../lib/sync';
 import { Staff } from '../types';
 import { Plus, Edit2, Trash2, User, X } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -10,7 +11,7 @@ export default function StaffPage() {
     const [currentStaff, setCurrentStaff] = useState<Partial<Staff>>({});
 
     useEffect(() => {
-        setStaffList(getStaff());
+        setStaffList(getStaff().filter(s => s.isActive !== false));
     }, []);
 
     const handleSave = () => {
@@ -29,12 +30,13 @@ export default function StaffPage() {
             accountNumberMasked: '',
             startDate: new Date().toISOString().split('T')[0],
             isActive: true,
-            applyWeeklyAllowance: true,
+            applyWeeklyAllowance: false,
             ...currentStaff
         } as Staff;
 
         saveStaff(newStaff);
-        setStaffList(getStaff());
+        setStaffList(getStaff().filter(s => s.isActive !== false));
+        syncToCloud();
         setIsEditing(false);
         setCurrentStaff({});
     };
@@ -42,7 +44,8 @@ export default function StaffPage() {
     const handleDelete = (id: string) => {
         if (confirm('정말 삭제하시겠습니까?')) {
             deleteStaff(id);
-            setStaffList(getStaff());
+            setStaffList(getStaff().filter(s => s.isActive !== false));
+            syncToCloud();
         }
     };
 
@@ -97,20 +100,7 @@ export default function StaffPage() {
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-between pt-4 border-t border-gray-50">
-                            <div className="flex items-center gap-2">
-                                <div className={clsx(
-                                    "w-1.5 h-1.5 rounded-full",
-                                    staff.isActive ? "bg-green-500" : "bg-gray-300"
-                                )} />
-                                <span className="text-[11px] font-semibold text-gray-500">
-                                    {staff.isActive ? '근무 중' : '퇴사'}
-                                </span>
-                            </div>
-                            <span className="text-[11px] font-medium text-gray-400">
-                                {staff.applyWeeklyAllowance ? '주휴수당 포함' : '주휴수당 미포함'}
-                            </span>
-                        </div>
+
                     </div>
                 ))}
             </div>
@@ -187,7 +177,7 @@ export default function StaffPage() {
                                 <label className="relative inline-flex items-center cursor-pointer">
                                     <input
                                         type="checkbox"
-                                        checked={currentStaff.applyWeeklyAllowance ?? true}
+                                        checked={currentStaff.applyWeeklyAllowance ?? false}
                                         onChange={e => setCurrentStaff({ ...currentStaff, applyWeeklyAllowance: e.target.checked })}
                                         className="sr-only peer"
                                     />

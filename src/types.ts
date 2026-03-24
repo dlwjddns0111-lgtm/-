@@ -63,8 +63,6 @@ export interface PayrollItem {
     basePay: number;
     overtimeMinutes: number;
     overtimePay: number;
-    nightMinutes: number;
-    nightPay: number;
     weeklyAllowancePay: number;
     deductions: Deduction[];
     totalDeduction: number;
@@ -77,8 +75,6 @@ export interface Settings {
     shopName: string;
     overtimeThresholdDaily: number; // e.g. 8 hours
     overtimeThresholdWeekly: number; // e.g. 40 hours
-    nightShiftStart: string; // 22:00
-    nightShiftEnd: string; // 06:00
     weeklyAllowanceEnabled: boolean;
 }
 

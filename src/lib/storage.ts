@@ -23,10 +23,13 @@ export const saveStaff = (staff: Staff) => {
 };
 
 export const deleteStaff = (id: string) => {
-    const list = getStaff().filter(s => s.id !== id);
-    localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(list));
+    const list = getStaff();
+    const index = list.findIndex(s => s.id === id);
+    if (index >= 0) {
+        list[index].isActive = false;
+        localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(list));
+    }
 };
-
 export const getAttendance = (): Attendance[] => {
     const data = localStorage.getItem(STORAGE_KEYS.ATTENDANCE);
     return data ? JSON.parse(data) : [];
@@ -52,9 +55,7 @@ export const getSettings = (): Settings => {
         shopName: '우리매장',
         overtimeThresholdDaily: 8,
         overtimeThresholdWeekly: 40,
-        nightShiftStart: '22:00',
-        nightShiftEnd: '06:00',
-        weeklyAllowanceEnabled: true,
+        weeklyAllowanceEnabled: false,
     };
 };
 
@@ -106,7 +107,7 @@ export const seedData = () => {
             // Normal
             { id: 'a1', shopId: 'default', staffId: 's1', date: `${yyyy}-${mm}-01`, clockIn: '09:00', clockOut: '18:00', breakMinutes: 60, tags: [] },
             // Night shift
-            { id: 'a2', shopId: 'default', staffId: 's1', date: `${yyyy}-${mm}-02`, clockIn: '18:00', clockOut: '23:00', breakMinutes: 0, tags: ['night'] },
+            { id: 'a2', shopId: 'default', staffId: 's1', date: `${yyyy}-${mm}-02`, clockIn: '18:00', clockOut: '23:00', breakMinutes: 0, tags: [] },
             // Overtime
             { id: 'a3', shopId: 'default', staffId: 's2', date: `${yyyy}-${mm}-01`, clockIn: '09:00', clockOut: '20:00', breakMinutes: 60, tags: ['overtime'] },
         ];

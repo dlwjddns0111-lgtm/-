@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Staff, Attendance, OwnerMemo } from '../types';
 import { getStaff, getAttendance, saveAttendance, deleteAttendance, getMemos, saveMemo, deleteMemo } from '../lib/storage';
+import { syncToCloud } from '../lib/sync';
 import { Clock, Plus, Copy, ChevronLeft, ChevronRight, Trash2, Edit2, Calendar, StickyNote, ArrowLeft, ArrowRight, X, Wallet } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay, addDays, subDays, parseISO, isToday } from 'date-fns';
 import { clsx } from 'clsx';
@@ -27,6 +28,10 @@ export default function AttendancePage() {
     const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [selectedScheduleDate, setSelectedScheduleDate] = useState<Date | null>(null);
 
+    // Add Selection Modal State
+    const [showAddSelectionModal, setShowAddSelectionModal] = useState(false);
+    const [selectedAddDate, setSelectedAddDate] = useState<Date | null>(null);
+
     useEffect(() => {
         setAttendance(getAttendance());
         setStaffList(getStaff());
@@ -50,11 +55,12 @@ export default function AttendancePage() {
 
         saveAttendance(record);
         setAttendance(getAttendance());
+        syncToCloud(); // Sync to cloud
         setIsEditing(false);
         setCurrentRecord({});
     };
 
-    const getStaffName = (id: string) => staffList.find(s => s.id === id)?.name || 'Unknown';
+    const getStaffName = (id: string) => staffList.find(s => s.id === id)?.name || '(삭제된 직원)';
 
     const calculateHours = (clockIn: string, clockOut: string) => {
         const [inH, inM] = clockIn.split(':').map(Number);
@@ -90,6 +96,7 @@ export default function AttendancePage() {
 
         saveMemo(record);
         setMemos(getMemos());
+        syncToCloud(); // Sync to cloud
         setIsMemoEditing(false);
         setCurrentMemo({});
     };
@@ -116,13 +123,16 @@ export default function AttendancePage() {
         filteredNewRecords.forEach(r => saveAttendance(r));
         setAttendance(getAttendance());
         setSelectedDate(targetDate);
+        syncToCloud(); // Sync to cloud
     };
+
+
 
     return (
         <div className="flex flex-col h-full bg-[#F9FAFB] overflow-hidden">
             {/* Header */}
             <div className="p-6 flex items-center justify-between border-b border-gray-100 bg-white shadow-sm z-20">
-                <h1 className="text-xl font-bold text-gray-900">근태 관리</h1>
+                <h1 className="text-xl font-bold text-gray-900" translate="no">근태기록</h1>
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
@@ -143,7 +153,7 @@ export default function AttendancePage() {
             </div>
 
             <div className="flex-1 overflow-y-auto px-3 py-6 space-y-8">
-                {/* 2. Calendar Grid */}
+                {/* 3. Calendar Grid */}
                 <div className="space-y-4">
                     <div className="flex justify-between items-end">
                         <h3 className="text-lg font-bold flex items-center gap-2 text-gray-700">
@@ -166,33 +176,47 @@ export default function AttendancePage() {
                             const dayMemos = memos.filter(m => isSameDay(new Date(m.date), day));
 
                             return (
-                                <button
+                                <div
                                     key={day.toISOString()}
+                                    role="button"
                                     onClick={() => setSelectedDate(day)}
+                                    data-date={day.toISOString()}
                                     className={clsx(
-                                        "min-h-[120px] p-2 flex flex-col items-start justify-start relative transition-all text-left group",
+                                        "min-h-[80px] p-2 flex flex-col items-start justify-start relative transition-all text-left group cursor-pointer",
                                         isSelected ? "bg-[#3B82F6]/5 ring-2 ring-inset ring-[#3B82F6] z-10" : "bg-white hover:bg-gray-50",
                                         !isCurrentMonth && "opacity-30"
                                     )}
                                 >
-                                    <div className="flex items-center justify-between w-full mb-2">
-                                        <span className={clsx(
-                                            "text-[11px] font-bold px-1.5 py-0.5 rounded-md transition-colors",
-                                            isToday(day) ? "bg-[#3B82F6] text-white" :
-                                                (isKoreanHoliday(day) || getDay(day) === 0) ? "text-red-500" :
-                                                    isSelected ? "text-[#3B82F6]" : "text-gray-900"
-                                        )}>
-                                            {format(day, 'd')}
-                                        </span>
+                                    <div className="flex flex-col w-full mb-1">
+                                        <div className="flex items-center gap-1">
+                                            <span className={clsx(
+                                                "text-[11px] font-bold px-1.5 py-0.5 rounded-md transition-colors",
+                                                isToday(day) ? "bg-[#3B82F6] text-white" :
+                                                    (isKoreanHoliday(day) || getDay(day) === 0) ? "text-red-500" :
+                                                        isSelected ? "text-[#3B82F6]" : "text-gray-900"
+                                            )}>
+                                                {format(day, 'd')}
+                                            </span>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedAddDate(day);
+                                                    setShowAddSelectionModal(true);
+                                                }}
+                                                className="w-4 h-4 flex items-center justify-center text-gray-300 hover:text-blue-500 transition-colors"
+                                            >
+                                                <Plus className="w-3 h-3" />
+                                            </button>
+                                        </div>
                                         {isKoreanHoliday(day) && (
-                                            <span className="text-[8px] font-bold text-red-400 truncate max-w-[40px]">
+                                            <span className="text-[10px] font-bold text-red-500 text-left mt-0.5 w-full truncate pl-1">
                                                 {getHolidayName(day)}
                                             </span>
                                         )}
                                     </div>
 
                                     <div className="w-full space-y-1 overflow-hidden">
-                                        {dayRecords.slice(0, 3).map((r, i) => {
+                                        {dayRecords.slice(0, 3).map((r) => {
                                             const staff = staffList.find(s => s.id === r.staffId);
 
                                             // Simple duration calculation
@@ -208,17 +232,19 @@ export default function AttendancePage() {
 
                                             return (
                                                 <div
-                                                    key={i}
-                                                    className="flex flex-col bg-white border border-gray-100 rounded py-0.5 px-1 shadow-[0_1px_1px_rgba(0,0,0,0.05)]"
+                                                    key={r.id}
+                                                    className={clsx(
+                                                        "w-full flex flex-col bg-white border border-gray-200 rounded p-[2px] hover:border-blue-400 hover:shadow-lg transition-all select-none"
+                                                    )}
                                                 >
-                                                    <div className="flex items-center gap-1">
-                                                        <div className="w-1 h-2.5 rounded-full shrink-0" style={{ backgroundColor: staff?.color || '#3B82F6' }} />
-                                                        <span className="text-[9px] font-bold text-gray-800 whitespace-nowrap overflow-hidden">
-                                                            {staff?.name}
+                                                    <div className="flex items-center gap-[2px] w-full pointer-events-none overflow-hidden">
+                                                        <div className="w-[3px] h-2.5 rounded-full shrink-0" style={{ backgroundColor: staff?.color || '#3B82F6' }} />
+                                                        <span className="text-[8px] font-bold text-gray-900 tracking-tighter whitespace-nowrap leading-none">
+                                                            {staff?.name || '(삭제된 직원)'}
                                                         </span>
                                                     </div>
-                                                    <div className="pl-2 -mt-0.5">
-                                                        <span className="text-[7.5px] font-medium text-blue-500 tabular-nums leading-none">
+                                                    <div className="pl-[5px] w-full mt-[1px]">
+                                                        <span className="text-[7px] font-medium text-blue-600 whitespace-nowrap tracking-tighter leading-none block">
                                                             {durationText}
                                                         </span>
                                                     </div>
@@ -249,104 +275,34 @@ export default function AttendancePage() {
                                             ))}
                                         </div>
                                     )}
-                                </button>
+                                </div>
                             );
                         })}
                     </div>
                 </div>
 
-                {/* 3. Daily Detail (Selected Date) */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Records Column */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between flex-nowrap gap-2">
-                            <h2 className="text-base font-bold text-gray-900 whitespace-nowrap">
-                                {format(selectedDate, 'M월 d일')} 기록
-                            </h2>
-                            <div className="flex gap-2 shrink-0">
-                                <button
-                                    onClick={() => handleCopyFromPreviousDay(selectedDate)}
-                                    className="neo-btn bg-white text-[10px] h-8 px-2.5 border-gray-100 whitespace-nowrap"
-                                >
-                                    <Copy className="w-3 h-3" /> 전날 복사
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setCurrentRecord({
-                                            date: format(selectedDate, 'yyyy-MM-dd'),
-                                            clockIn: '09:00',
-                                            clockOut: '18:00',
-                                            breakMinutes: 0
-                                        } as Attendance);
-                                        setIsEditing(true);
-                                    }}
-                                    className="neo-btn neo-btn-primary h-8 w-8 p-0 rounded-lg shadow-blue-500/10"
-                                >
-                                    <Plus className="w-5 h-5" />
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
-                            {selectedDateRecords.length === 0 ? (
-                                <div className="p-10 bg-white border-2 border-dashed border-gray-100 rounded-2xl text-center text-gray-300 font-medium text-sm">
-                                    기록 정보가 없습니다
-                                </div>
-                            ) : (
-                                selectedDateRecords.map(record => (
-                                    <div key={record.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between group transition-all hover:ring-1 hover:ring-blue-100">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: staffList.find(s => s.id === record.staffId)?.color || '#3B82F6' }} />
-                                            <div>
-                                                <p className="text-sm font-bold text-gray-900">{getStaffName(record.staffId)}</p>
-                                                <div className="flex items-center gap-2 mt-1 flex-nowrap">
-                                                    <span className="text-[11px] font-medium text-gray-400 whitespace-nowrap">{record.clockIn} - {record.clockOut}</span>
-                                                    <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-bold whitespace-nowrap">
-                                                        {calculateHours(record.clockIn, record.clockOut)}시간
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button
-                                                onClick={() => { setCurrentRecord(record); setIsEditing(true); }}
-                                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-50 text-gray-400 hover:text-blue-500 hover:bg-white border border-transparent hover:border-blue-100"
-                                            >
-                                                <Edit2 className="w-3.5 h-3.5" />
-                                            </button>
-                                            <button
-                                                onClick={() => { if (confirm('삭제할까요?')) { deleteAttendance(record.id); setAttendance(getAttendance()); } }}
-                                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-50 text-gray-400 hover:text-red-500 hover:bg-white border border-transparent hover:border-red-100"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Owner's Schedule Column */}
+                {/* Top Section: Schedule & Records (Side by Side) */}
+                <div className="grid grid-cols-2 gap-3">
+                    {/* 1. Owner's Schedule */}
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-bold text-gray-900">
-                                사장님 스케줄
+                            <h2 className="text-sm font-bold text-gray-900" translate="no">
+                                사장님 메모
                             </h2>
                             <button
                                 onClick={() => {
                                     setCurrentMemo({ date: format(selectedDate, 'yyyy-MM-dd'), type: 'memo' });
                                     setIsMemoEditing(true);
                                 }}
-                                className="neo-btn bg-white text-[11px] h-9 px-3 border-gray-100"
+                                className="neo-btn bg-white text-[9px] h-7 px-2 border-gray-100"
                             >
-                                <Plus className="w-3.5 h-3.5" /> 스케줄 추가
+                                <Plus className="w-3 h-3" />
                             </button>
                         </div>
 
-                        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+                        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 h-[150px] overflow-y-auto">
                             {selectedDateMemos.length === 0 ? (
-                                <div className="py-10 border-2 border-dashed border-gray-100 rounded-xl font-medium text-gray-300 text-center text-sm">
+                                <div className="h-full flex items-center justify-center border-2 border-dashed border-gray-100 rounded-xl font-medium text-gray-300 text-center text-sm">
                                     등록된 스케줄이 없습니다
                                 </div>
                             ) : (
@@ -371,7 +327,7 @@ export default function AttendancePage() {
                                                     <Edit2 className="w-3.5 h-3.5" />
                                                 </button>
                                                 <button
-                                                    onClick={() => { if (confirm('삭제할까요?')) { deleteMemo(memo.id); setMemos(getMemos()); } }}
+                                                    onClick={() => { if (confirm('삭제할까요?')) { deleteMemo(memo.id); setMemos(getMemos()); syncToCloud(); } }}
                                                     className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-50 text-gray-400 hover:text-red-500 hover:bg-white border border-transparent hover:border-red-100"
                                                 >
                                                     <Trash2 className="w-3.5 h-3.5" />
@@ -383,7 +339,81 @@ export default function AttendancePage() {
                             )}
                         </div>
                     </div>
+
+                    {/* 2. Daily Records */}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between flex-nowrap gap-1">
+                            <h2 className="text-[11px] font-bold text-gray-900 whitespace-nowrap">
+                                {format(selectedDate, 'M월 d일')}
+                            </h2>
+                            <div className="flex gap-1 shrink-0">
+                                <button
+                                    onClick={() => handleCopyFromPreviousDay(selectedDate)}
+                                    className="neo-btn bg-white text-[8px] h-7 px-1.5 border-gray-100 whitespace-nowrap"
+                                >
+                                    <Copy className="w-2.5 h-2.5" />
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setCurrentRecord({
+                                            date: format(selectedDate, 'yyyy-MM-dd'),
+                                            clockIn: '09:00',
+                                            clockOut: '18:00',
+                                            breakMinutes: 0
+                                        } as Attendance);
+                                        setIsEditing(true);
+                                    }}
+                                    className="neo-btn neo-btn-primary h-7 w-7 p-0 rounded-lg shadow-blue-500/10"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 h-[150px] overflow-y-auto">
+                            {selectedDateRecords.length === 0 ? (
+                                <div className="h-full flex items-center justify-center border-2 border-dashed border-gray-100 rounded-xl font-medium text-gray-300 text-center text-sm">
+                                    기록 정보가 없습니다
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {selectedDateRecords.map(record => (
+                                        <div key={record.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm relative group transition-all hover:ring-1 hover:ring-blue-100">
+                                            <div className="absolute top-2 right-2 flex gap-1">
+                                                <button
+                                                    onClick={() => { setCurrentRecord(record); setIsEditing(true); }}
+                                                    className="w-5 h-5 rounded flex items-center justify-center text-gray-300 hover:text-blue-500 hover:bg-gray-50 transition-all"
+                                                >
+                                                    <Edit2 className="w-2.5 h-2.5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => { if (confirm('삭제할까요?')) { deleteAttendance(record.id); setAttendance(getAttendance()); syncToCloud(); } }}
+                                                    className="w-5 h-5 rounded flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-gray-50 transition-all"
+                                                >
+                                                    <Trash2 className="w-2.5 h-2.5" />
+                                                </button>
+                                            </div>
+
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: staffList.find(s => s.id === record.staffId)?.color || '#3B82F6' }} />
+                                                <div className="min-w-0 pr-12">
+                                                    <p className="text-sm font-bold text-gray-900 break-keep leading-tight">{getStaffName(record.staffId)}</p>
+                                                    <div className="flex items-center gap-x-2 gap-y-1 mt-1 flex-wrap">
+                                                        <span className="text-[11px] font-medium text-gray-400 whitespace-nowrap">{record.clockIn} - {record.clockOut}</span>
+                                                        <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold whitespace-nowrap">
+                                                            {calculateHours(record.clockIn, record.clockOut)}시간
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
+
             </div>
 
             {/* Modals */}
@@ -405,7 +435,7 @@ export default function AttendancePage() {
                                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">직원</label>
                                 <select value={currentRecord.staffId || ''} onChange={e => setCurrentRecord({ ...currentRecord, staffId: e.target.value })} className="neo-input w-full" required>
                                     <option value="">직원 선택</option>
-                                    {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    {staffList.filter(s => s.isActive !== false).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                 </select>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
@@ -525,6 +555,65 @@ export default function AttendancePage() {
                     </div>
                 </div>
             )}
+            {/* Add Selection Modal */}
+            {showAddSelectionModal && selectedAddDate && (
+                <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-sm p-6 rounded-2xl shadow-2xl border border-gray-100 animate-in fade-in zoom-in duration-200">
+                        <div className="text-center mb-6">
+                            <h3 className="text-lg font-bold text-gray-900">
+                                {format(selectedAddDate, 'M월 d일')} 추가
+                            </h3>
+                            <p className="text-sm text-gray-400 mt-1">어떤 항목을 추가하시겠습니까?</p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                onClick={() => {
+                                    setCurrentRecord({
+                                        date: format(selectedAddDate, 'yyyy-MM-dd'),
+                                        clockIn: '09:00',
+                                        clockOut: '18:00',
+                                        breakMinutes: 0
+                                    } as Attendance);
+                                    setIsEditing(true);
+                                    setShowAddSelectionModal(false);
+                                }}
+                                className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 border-blue-100 bg-blue-50/50 hover:bg-blue-100 hover:border-blue-300 transition-all group"
+                            >
+                                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center group-hover:bg-white group-hover:text-blue-600 transition-colors text-blue-500">
+                                    <Clock className="w-5 h-5" />
+                                </div>
+                                <span className="font-bold text-gray-700 group-hover:text-blue-700">근태기록</span>
+                            </button>
+
+                            <button
+                                onClick={() => {
+                                    setCurrentMemo({
+                                        date: format(selectedAddDate, 'yyyy-MM-dd'),
+                                        type: 'memo'
+                                    });
+                                    setIsMemoEditing(true);
+                                    setShowAddSelectionModal(false);
+                                }}
+                                className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 border-green-100 bg-green-50/50 hover:bg-green-100 hover:border-green-300 transition-all group"
+                            >
+                                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center group-hover:bg-white group-hover:text-green-600 transition-colors text-green-500">
+                                    <StickyNote className="w-5 h-5" />
+                                </div>
+                                <span className="font-bold text-gray-700 group-hover:text-green-700">사장님 메모</span>
+                            </button>
+                        </div>
+
+                        <button
+                            onClick={() => setShowAddSelectionModal(false)}
+                            className="w-full mt-4 py-3 text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors"
+                        >
+                            취소
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
+
 }

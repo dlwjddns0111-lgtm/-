@@ -11,8 +11,8 @@ export default defineConfig({
             registerType: 'autoUpdate',
             includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
             manifest: {
-                name: 'Payroll App',
-                short_name: 'Payroll',
+                name: '사장님 인건비',
+                short_name: '사장님 인건비',
                 description: 'Manage your store payroll and attendance',
                 display: 'standalone',
                 background_color: '#ffffff',

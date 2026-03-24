@@ -5,12 +5,11 @@ export const downloadPayrollCsv = (items: PayrollItem[], filename: string) => {
     // BOM for Excel Korean support
     const BOM = '\uFEFF';
 
-    const headers = ['직원명', '기본급', '연장수당', '야간수당', '주휴수당', '공제총액', '가처분지급액'];
+    const headers = ['직원명', '기본급', '연장수당', '주휴수당', '공제총액', '가처분지급액'];
     const rows = items.map(item => [
         item.staffName,
         item.basePay,
         item.overtimePay,
-        item.nightPay,
         item.weeklyAllowancePay,
         item.totalDeduction,
         item.netPay

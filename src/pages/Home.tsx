@@ -14,7 +14,8 @@ import {
     ArrowDownRight
 } from 'lucide-react';
 import { format, startOfMonth, subMonths } from 'date-fns';
-import { getStaff } from '../lib/storage';
+import { getStaff, getSettings, saveSettings } from '../lib/storage';
+import { syncToCloud } from '../lib/sync';
 import { computePayrollSummary, computeMonthlyHistory } from '../lib/payroll';
 import { PayrollSummary, MonthlyHistory } from '../types';
 import clsx from 'clsx';
@@ -33,8 +34,8 @@ export default function Home() {
         setSummary(computePayrollSummary(currentMonth));
         setHistory(computeMonthlyHistory(4));
 
-        const storedName = localStorage.getItem('storeName');
-        if (storedName) setStoreName(storedName);
+        const settings = getSettings();
+        if (settings.shopName) setStoreName(settings.shopName);
     }, []);
 
     if (!summary) return null;
@@ -59,7 +60,9 @@ export default function Home() {
                             const name = prompt('가게 이름을 입력하세요', storeName);
                             if (name) {
                                 setStoreName(name);
-                                localStorage.setItem('storeName', name);
+                                const settings = getSettings();
+                                saveSettings({ ...settings, shopName: name });
+                                syncToCloud();
                             }
                         }}
                     >
@@ -92,11 +95,11 @@ export default function Home() {
                     <div className="flex items-baseline justify-between px-2 h-72 gap-4 relative">
                         {history.map((h, i) => {
                             const isCurrent = h.month === format(new Date(), 'M월');
-                            const maxCost = Math.max(...history.map(x => x.cost)) || 10000;
+                            const maxCost = Math.max(...history.map(x => x.cost), 100000); // Dynamic max scale
 
                             // Simple linear scale relative to maxCost
                             // 5% minimum for 0 won to show something exists, up to 100%
-                            const heightPercentage = h.cost === 0 ? 0 : Math.max((h.cost / maxCost) * 100, 5);
+                            const heightPercentage = Math.min(Math.max((h.cost / maxCost) * 100, 5), 100);
 
                             return (
                                 <div key={i} className="flex-1 flex flex-col items-center group h-full">

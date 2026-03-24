@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { getStaff, getAttendance, getSettings } from '../lib/storage';
 import { computePayrollItem } from '../lib/payroll';
 import { Staff, Attendance, PayrollItem, Deduction } from '../types';
-import { DollarSign, Download, Printer, X, FileText } from 'lucide-react';
+import { DollarSign, Download, Printer, X, FileText, Trash2 } from 'lucide-react';
+import { syncToCloud } from '../lib/sync';
 import { format } from 'date-fns';
 import { clsx } from 'clsx';
 
@@ -23,11 +24,40 @@ export default function PayrollPage() {
             return d.getFullYear() === year && d.getMonth() + 1 === m;
         });
 
-        const items = staff.filter(s => s.isActive).map(s => {
-            const staffRecords = filteredAttendance.filter(r => r.staffId === s.id);
+        const staffIdsWithRecords = Array.from(new Set(filteredAttendance.map(r => r.staffId)));
+
+        // Ensure all staff that have records OR are active are included.
+        const relevantStaffIds = Array.from(new Set([
+            ...staffIdsWithRecords,
+            ...staff.filter(s => s.isActive !== false).map(s => s.id)
+        ]));
+
+        const items = relevantStaffIds.map(id => {
+            let s = staff.find(st => st.id === id);
+
+            if (!s) {
+                // Hard deleted staff fallback
+                s = {
+                    id: id,
+                    name: '(삭제된 직원)',
+                    hourlyWage: 0,
+                    isActive: false,
+                    shopId: 'default',
+                    phone: '',
+                    role: 'staff',
+                    rank: '알바',
+                    payDay: 10,
+                    bankName: '',
+                    accountNumberMasked: '',
+                    startDate: '',
+                    applyWeeklyAllowance: false
+                } as Staff;
+            }
+
+            const staffRecords = filteredAttendance.filter(r => r.staffId === id);
             const item = computePayrollItem(s, staffRecords, settings, []);
 
-            const gross = item.basePay + item.overtimePay + item.nightPay + item.weeklyAllowancePay;
+            const gross = item.basePay + item.overtimePay + item.weeklyAllowancePay;
             const tax = Math.floor(gross * 0.033);
             item.deductions = [{ name: '소득세(3.3%)', amount: tax }];
             item.totalDeduction = tax;
@@ -43,6 +73,35 @@ export default function PayrollPage() {
         setStaffList(getStaff());
         calculate();
     }, [month]);
+
+    const handleDeletePayroll = (staffId: string, staffName: string) => {
+        if (confirm(`${staffName}의 ${month} 급여/근태 내역을 모두 삭제하시겠습니까? (복구할 수 없습니다)`)) {
+            const attendance = getAttendance();
+            const [year, m] = month.split('-').map(Number);
+
+            // Delete records locally by filtering them out directly in storage logic, 
+            // but we don't have a bulk delete, so we'll filter and run save.
+            // Wait, there's no bulk save function exported from storage.ts. 
+            // We can just use the exposed deleteAttendance in a loop, or filter and setItem directly.
+            // Since we're in component, let's use the local storage directly or just call deleteAttendance for each.
+
+            const recordsToDelete = attendance.filter(r => {
+                if (r.staffId !== staffId) return false;
+                const d = new Date(r.date);
+                return d.getFullYear() === year && d.getMonth() + 1 === m;
+            });
+
+            // Wait, storage.ts might not like concurrent deletes since it reads and writes each time.
+            // So we delete sequentially.
+            // Actually it's synchronous so it is fine.
+            // But doing it safely:
+            const remainingList = attendance.filter(r => !recordsToDelete.includes(r));
+            localStorage.setItem('payroll_app_attendance', JSON.stringify(remainingList));
+
+            syncToCloud();
+            calculate();
+        }
+    };
 
     return (
         <div className="min-h-full bg-[#F9FAFB] p-6 space-y-6">
@@ -71,17 +130,24 @@ export default function PayrollPage() {
                                 <div key={item.staffId} className="neo-card bg-white p-6 border-none ring-1 ring-gray-100">
                                     <div className="flex justify-between items-center mb-4 gap-2 flex-nowrap">
                                         <div className="flex items-center gap-2 min-w-0">
-                                            <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 font-bold border border-gray-100 shrink-0 text-xs">
-                                                {item.staffName[0]}
-                                            </div>
+
                                             <div className="min-w-0">
                                                 <h3 className="font-bold text-gray-900 text-sm truncate">{item.staffName}</h3>
-                                                <p className="text-[10px] text-gray-400 whitespace-nowrap">총 {Math.round((item.baseMinutes + item.overtimeMinutes + item.nightMinutes) / 60)}시간</p>
+                                                <p className="text-[10px] text-gray-400 whitespace-nowrap">총 {Math.round((item.baseMinutes + item.overtimeMinutes) / 60)}시간</p>
                                             </div>
                                         </div>
-                                        <div className="text-right shrink-0">
-                                            <p className="text-sm font-bold text-gray-900 whitespace-nowrap">{item.netPay.toLocaleString()}원</p>
-                                            <p className="text-[9px] text-gray-400">실지급액</p>
+                                        <div className="flex items-center gap-3 text-right shrink-0">
+                                            <div className="text-right">
+                                                <p className="text-sm font-bold text-gray-900 whitespace-nowrap">{item.netPay.toLocaleString()}원</p>
+                                                <p className="text-[9px] text-gray-400">실지급액</p>
+                                            </div>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDeletePayroll(item.staffId, item.staffName); }}
+                                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-50 text-gray-400 hover:text-white hover:bg-red-500 transition-colors border border-gray-100"
+                                                title="이번 달 내역 삭제"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
                                         </div>
                                     </div>
 
@@ -90,18 +156,12 @@ export default function PayrollPage() {
                                             <span>기본급</span>
                                             <span className="text-gray-900 font-bold">{item.basePay.toLocaleString()}</span>
                                         </div>
-                                        {(item.overtimePay > 0 || item.nightPay > 0 || item.weeklyAllowancePay > 0) && (
+                                        {(item.overtimePay > 0 || item.weeklyAllowancePay > 0) && (
                                             <div className="pt-2 border-t border-gray-200 space-y-1">
                                                 {item.overtimePay > 0 && (
                                                     <div className="flex justify-between text-[10px] font-bold text-blue-500">
                                                         <span>연장수당 ({Math.round(item.overtimeMinutes / 60)}시간)</span>
                                                         <span>+{item.overtimePay.toLocaleString()}</span>
-                                                    </div>
-                                                )}
-                                                {item.nightPay > 0 && (
-                                                    <div className="flex justify-between text-[10px] font-bold text-purple-500">
-                                                        <span>야간수당 ({Math.round(item.nightMinutes / 60)}시간)</span>
-                                                        <span>+{item.nightPay.toLocaleString()}</span>
                                                     </div>
                                                 )}
                                                 {item.weeklyAllowancePay > 0 && (
@@ -133,7 +193,7 @@ export default function PayrollPage() {
                             <div className="neo-card p-3 text-center">
                                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tight mb-1">총 근무</p>
                                 <p className="text-sm md:text-xl font-bold text-gray-900 whitespace-nowrap">
-                                    {Math.round(payrollItems.reduce((acc, curr) => acc + curr.baseMinutes + curr.overtimeMinutes + curr.nightMinutes, 0) / 60)}시간
+                                    {Math.round(payrollItems.reduce((acc, curr) => acc + curr.baseMinutes + curr.overtimeMinutes, 0) / 60)}시간
                                 </p>
                             </div>
                             <div className="neo-card p-3 text-center">
@@ -180,7 +240,7 @@ export default function PayrollPage() {
                                 <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
                                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">총 근무 시간</p>
                                     <p className="text-xl font-bold text-gray-900">
-                                        {Math.round((selectedItem.baseMinutes + selectedItem.overtimeMinutes + selectedItem.nightMinutes) / 60)}시간
+                                        {Math.round((selectedItem.baseMinutes + selectedItem.overtimeMinutes) / 60)}시간
                                     </p>
                                 </div>
                                 <div className="bg-[#EFF6FF] p-4 rounded-2xl border border-blue-50">
@@ -206,12 +266,6 @@ export default function PayrollPage() {
                                             <div className="flex justify-between text-sm font-medium">
                                                 <span className="text-gray-500">연장수당</span>
                                                 <span className="text-blue-500 font-bold">+{selectedItem.overtimePay.toLocaleString()}원</span>
-                                            </div>
-                                        )}
-                                        {selectedItem.nightPay > 0 && (
-                                            <div className="flex justify-between text-sm font-medium">
-                                                <span className="text-gray-500">야간수당</span>
-                                                <span className="text-purple-500 font-bold">+{selectedItem.nightPay.toLocaleString()}원</span>
                                             </div>
                                         )}
                                         {selectedItem.weeklyAllowancePay > 0 && (

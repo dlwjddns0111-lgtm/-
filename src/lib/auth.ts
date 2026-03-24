@@ -1,4 +1,6 @@
-// src/lib/auth.ts
+import { auth } from './firebase';
+import { GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence } from "firebase/auth";
+
 export interface User {
     id: string;
     email: string;
@@ -21,16 +23,26 @@ export const logout = () => {
     localStorage.removeItem(AUTH_KEY);
 };
 
-// Mock Google Login Process
+// Real Google Login Process using Firebase (Reverted to Popup for better compatibility if Redirect fails)
 export const signInWithGoogle = async (): Promise<User> => {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({
+        prompt: 'select_account'
+    });
 
-    // Return mock user
-    return {
-        id: 'google_123',
-        email: 'owner@example.com',
-        name: '사장님',
-        photoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=owner'
-    };
+    try {
+        await setPersistence(auth, browserLocalPersistence);
+        const result = await signInWithPopup(auth, provider);
+        const firebaseUser = result.user;
+
+        return {
+            id: firebaseUser.uid,
+            email: firebaseUser.email || '',
+            name: firebaseUser.displayName || 'Google User',
+            photoUrl: firebaseUser.photoURL || ''
+        };
+    } catch (error) {
+        console.error("Google Login Error", error);
+        throw error;
+    }
 };

@@ -21,54 +21,6 @@ export const computeWorkMinutes = (clockIn: string, clockOut: string): number =>
     return Math.max(0, diff);
 };
 
-export const splitNightMinutes = (
-    clockIn: string,
-    clockOut: string,
-    nightStartStr: string = '22:00',
-    nightEndStr: string = '06:00'
-): number => {
-    let start = parseTime(clockIn);
-    let end = parseTime(clockOut);
-
-    // If shift crosses midnight, split logic
-    // Simplified logic: assume max 24h shift.
-    // We need to intersect [start, end] with [nightStart, nightEnd]
-
-    // Normalize dates to handle overnight
-    if (isBefore(end, start)) {
-        end = addDays(end, 1);
-    }
-
-    // Define night ranges.
-    // Scenario 1: Night is 22:00 today -> 06:00 tomorrow
-    const builtNightStart = parseTime(nightStartStr);
-    const builtNightEnd = addDays(parseTime(nightEndStr), 1);
-
-    // Previous night (yesterday 22:00 -> today 06:00) - in case shift started early morning
-    const prevNightStart = addDays(builtNightStart, -1);
-    const prevNightEnd = addDays(builtNightEnd, -1);
-
-    // Helper to get intersection minutes
-    const getIntersection = (s1: Date, e1: Date, s2: Date, e2: Date) => {
-        const startMax = isAfter(s1, s2) ? s1 : s2;
-        const endMin = isBefore(e1, e2) ? e1 : e2;
-        const diff = differenceInMinutes(endMin, startMax);
-        return diff > 0 ? diff : 0;
-    };
-
-    let nightMinutes = 0;
-    nightMinutes += getIntersection(start, end, prevNightStart, prevNightEnd);
-    nightMinutes += getIntersection(start, end, builtNightStart, builtNightEnd);
-
-    // Note: This simplified version doesn't subtract break time specifically from night time 
-    // unless we know exactly WHEN the break was taken. 
-    // Rule of thumb: Pro-rate or assume break is not in night if possible? 
-    // For MVP, if night portion > 0, we leave it. Or we can just ignore breaks for night calc for now 
-    // OR the user should specify break time range.
-    // Standard simple practice: just return calculated intersection.
-    return nightMinutes;
-};
-
 export const computePayrollItem = (
     staff: Staff,
     records: Attendance[],
@@ -76,13 +28,11 @@ export const computePayrollItem = (
     deductionsTemplate: Deduction[]
 ): PayrollItem => {
     let totalBaseMinutes = 0;
-    let totalNightMinutes = 0;
     let totalOvertimeMinutes = 0;
 
     // 1. Calculate Daily Hours & Overtime
     records.forEach(record => {
         const net = computeWorkMinutes(record.clockIn, record.clockOut);
-        const night = splitNightMinutes(record.clockIn, record.clockOut, settings.nightShiftStart, settings.nightShiftEnd);
 
         let dailyOvertime = 0;
         // Daily overtime rule
@@ -92,7 +42,6 @@ export const computePayrollItem = (
 
         totalBaseMinutes += (net - dailyOvertime);
         totalOvertimeMinutes += dailyOvertime;
-        totalNightMinutes += night;
     });
 
     // 2. Weekly Overtime Check (Simplified: just compare total vs 40h if daily overtime wasn't enough?)
@@ -148,7 +97,6 @@ export const computePayrollItem = (
 
     const basePay = Math.floor((totalBaseMinutes / 60) * staff.hourlyWage);
     const overtimePay = Math.floor((totalOvertimeMinutes / 60) * staff.hourlyWage * 1.5);
-    const nightPay = Math.floor((totalNightMinutes / 60) * staff.hourlyWage * 0.5); // 0.5 because base is already in basePay/overtime
 
     // Note: if night overlap with base, we pay 1.0 (base) + 0.5 (night).
     // If night overlaps with overtime, we pay 1.5 (overtime) + 0.5 (night) = 2.0.
@@ -157,7 +105,7 @@ export const computePayrollItem = (
     // totalNightMinutes is purely time-range based.
     // So adding them constructs the full pay.
 
-    const totalGross = basePay + overtimePay + nightPay + weeklyAllowancePay;
+    const totalGross = basePay + overtimePay + weeklyAllowancePay;
 
     const totalDeduction = deductionsTemplate.reduce((sum, d) => sum + d.amount, 0);
 
@@ -170,8 +118,6 @@ export const computePayrollItem = (
         basePay,
         overtimeMinutes: totalOvertimeMinutes,
         overtimePay,
-        nightMinutes: totalNightMinutes,
-        nightPay,
         weeklyAllowancePay: Math.floor(weeklyAllowancePay),
         deductions: deductionsTemplate,
         totalDeduction,
@@ -191,8 +137,24 @@ export const computePayrollSummary = (monthStr: string): PayrollSummary => {
     let totalLaborCost = 0;
 
     activeStaffIds.forEach(staffId => {
-        const staff = allStaff.find(s => s.id === staffId);
-        if (!staff) return;
+        let staff = allStaff.find(s => s.id === staffId);
+        if (!staff) {
+            staff = {
+                id: staffId,
+                shopId: 'default',
+                name: '(삭제된 직원)',
+                phone: '',
+                role: 'staff',
+                rank: '알바',
+                hourlyWage: 0,
+                payDay: 10,
+                bankName: '',
+                accountNumberMasked: '',
+                startDate: '',
+                isActive: false,
+                applyWeeklyAllowance: false
+            } as Staff;
+        }
 
         const staffRecords = monthRecords.filter(r => r.staffId === staffId);
         const item = computePayrollItem(staff, staffRecords, settings, []);

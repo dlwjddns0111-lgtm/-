@@ -5,15 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && copy dist\\index.html dist\\200.html",
     "lint": "eslint .",
     "preview": "vite preview",
-    "deploy": "firebase deploy"
+    "deploy": "firebase deploy",
+    "deploy:surge": "npm run build && surge dist --domain payroll-kakao-test.surge.sh"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.2",
     "@capacitor/cli": "^8.0.2",
     "@capacitor/core": "^8.0.2",
+    "@types/kakao-js-sdk": "^1.39.5",
     "clsx": "^2.1.0",
     "date-fns": "^3.3.1",
     "firebase": "^10.8.0",

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { getSettings, saveSettings } from '../lib/storage';
+import { syncToCloud, syncFromCloud } from '../lib/sync';
 import { Settings } from '../types';
-import { LogOut, Save, Settings as SettingsIcon, Clock, Bell, Shield, ChevronRight } from 'lucide-react';
+import { LogOut, Save, Settings as SettingsIcon, Clock, Bell, Shield, ChevronRight, ArrowDownCircle, UploadCloud } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export default function SettingsPage({ onLogout }: { onLogout: () => void }) {
@@ -14,8 +15,30 @@ export default function SettingsPage({ onLogout }: { onLogout: () => void }) {
     const handleSave = () => {
         if (settings) {
             saveSettings(settings);
+            syncToCloud();
             alert('설정이 저장되었습니다.');
         }
+    };
+
+    const handleManualSync = async () => {
+        const confirmed = confirm('클라우드 서버에서 모든 데이터를 내려받을까요? 현재 기기의 데이터가 서버 내용으로 덮어씌워집니다.');
+        if (!confirmed) return;
+
+        const updated = await syncFromCloud();
+        if (updated) {
+            alert('데이터 동기화 완료! 최신 정보를 불러오기 위해 앱이 새로고침 됩니다.');
+            window.location.reload();
+        } else {
+            alert('서버에 저장된 데이터가 없거나 불러오기에 실패했습니다.');
+        }
+    };
+
+    const handleManualUpload = async () => {
+        const confirmed = confirm('현재 기기의 데이터를 클라우드 서버로 강제 업로드할까요? 다른 기기에서도 이 데이터를 볼 수 있게 됩니다.');
+        if (!confirmed) return;
+
+        await syncToCloud();
+        alert('데이터 업로드 완료!');
     };
 
     if (!settings) return null;
@@ -41,25 +64,6 @@ export default function SettingsPage({ onLogout }: { onLogout: () => void }) {
 
                         <div className="neo-card bg-white p-8 space-y-8 border-none ring-1 ring-gray-100">
                             <div className="space-y-3">
-                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400">야간수당 구간 (22:00 - 06:00 권장)</label>
-                                <div className="flex items-center gap-3">
-                                    <input
-                                        type="time"
-                                        className="neo-input flex-1"
-                                        value={settings.nightShiftStart}
-                                        onChange={e => setSettings({ ...settings, nightShiftStart: e.target.value })}
-                                    />
-                                    <div className="w-3 h-px bg-gray-300"></div>
-                                    <input
-                                        type="time"
-                                        className="neo-input flex-1"
-                                        value={settings.nightShiftEnd}
-                                        onChange={e => setSettings({ ...settings, nightShiftEnd: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-3 pt-6 border-t border-gray-100">
                                 <label className="text-xs font-bold uppercase tracking-widest text-gray-400">일일 연장수당 기준 (보통 8시간)</label>
                                 <div className="relative">
                                     <input
