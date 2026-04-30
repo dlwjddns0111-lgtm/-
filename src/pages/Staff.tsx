@@ -15,7 +15,9 @@ export default function StaffPage() {
     }, []);
 
     const handleSave = () => {
-        if (!currentStaff.name || !currentStaff.hourlyWage) return alert('필수 정보를 입력하세요.');
+        if (!currentStaff.name) return alert('이름을 입력하세요.');
+        if ((currentStaff.salaryType || 'hourly') === 'hourly' && !currentStaff.hourlyWage) return alert('시급을 입력하세요.');
+        if (currentStaff.salaryType === 'monthly' && !currentStaff.monthlySalary) return alert('월급을 입력하세요.');
 
         const newStaff: Staff = {
             id: currentStaff.id || crypto.randomUUID(),
@@ -24,15 +26,21 @@ export default function StaffPage() {
             phone: currentStaff.phone || '',
             role: 'staff',
             rank: currentStaff.rank || '알바',
-            hourlyWage: Number(currentStaff.hourlyWage),
+            salaryType: currentStaff.salaryType || 'hourly',
+            hourlyWage: Number(currentStaff.hourlyWage || 0),
+            monthlySalary: Number(currentStaff.monthlySalary || 0),
             payDay: 10,
             bankName: '',
             accountNumberMasked: '',
-            startDate: new Date().toISOString().split('T')[0],
+            startDate: currentStaff.startDate || new Date().toISOString().split('T')[0],
             isActive: true,
-            applyWeeklyAllowance: false,
-            ...currentStaff
-        } as Staff;
+            applyWeeklyAllowance: currentStaff.applyWeeklyAllowance ?? false,
+            applyInsurances: currentStaff.applyInsurances ?? false,
+            applyNightAllowance: currentStaff.applyNightAllowance ?? false,
+            applyHolidayAllowance: currentStaff.applyHolidayAllowance ?? false,
+            color: currentStaff.color || '#3B82F6',
+            notes: currentStaff.notes || ''
+        };
 
         saveStaff(newStaff);
         setStaffList(getStaff().filter(s => s.isActive !== false));
@@ -50,9 +58,9 @@ export default function StaffPage() {
     };
 
     return (
-        <div className="min-h-full bg-[#F9FAFB] p-6 space-y-6">
-            <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                <h1 className="text-xl font-bold text-gray-900">직원 목록</h1>
+        <div className="min-h-full bg-[#F9FAFB] dark:bg-gray-950 p-6 space-y-6 transition-colors">
+            <div className="flex justify-between items-center bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors">
+                <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">직원 목록</h1>
                 <button
                     onClick={() => { setCurrentStaff({}); setIsEditing(true); }}
                     className="neo-btn neo-btn-primary py-2 px-4 text-sm"
@@ -63,7 +71,7 @@ export default function StaffPage() {
 
             <div className="grid grid-cols-1 gap-4">
                 {staffList.map(staff => (
-                    <div key={staff.id} className="neo-card bg-white p-6 flex flex-col justify-between border-none ring-1 ring-gray-100 shadow-sm hover:shadow-md transition-all">
+                    <div key={staff.id} className="neo-card bg-white dark:bg-gray-900 p-6 flex flex-col justify-between border-none ring-1 ring-gray-100 dark:ring-gray-800 shadow-sm hover:shadow-md transition-all">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-3">
                                 <div
@@ -74,14 +82,20 @@ export default function StaffPage() {
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2">
-                                        <h3 className="text-lg font-bold text-gray-900">{staff.name}</h3>
-                                        <span className="neo-badge">
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">{staff.name}</h3>
+                                        <span className="neo-badge dark:bg-gray-800 dark:text-gray-300">
                                             {staff.rank}
                                         </span>
                                     </div>
                                     <p className="text-xs text-gray-400 font-medium tracking-tight">
-                                        ₩{staff.hourlyWage.toLocaleString()} / 시급
+                                        {staff.salaryType === 'monthly' 
+                                            ? `₩${(staff.monthlySalary || 0).toLocaleString()} / 월급`
+                                            : `₩${staff.hourlyWage.toLocaleString()} / 시급`
+                                        }
                                     </p>
+                                    {staff.phone && (
+                                        <p className="text-[10px] text-gray-300 font-medium mt-0.5">{staff.phone}</p>
+                                    )}
                                 </div>
                             </div>
                             <div className="flex gap-2">
@@ -99,51 +113,97 @@ export default function StaffPage() {
                                 </button>
                             </div>
                         </div>
-
-
                     </div>
                 ))}
             </div>
 
             {isEditing && (
-                <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div className="neo-card w-full max-w-sm bg-white p-8 border-none shadow-2xl">
-                        <div className="flex justify-between items-center mb-10">
+                <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+                    <div className="neo-card w-full max-w-sm bg-white p-8 border-none shadow-2xl my-auto">
+                        <div className="flex justify-between items-center mb-6">
                             <h3 className="text-2xl font-bold text-gray-900">직원 정보</h3>
                             <button onClick={() => setIsEditing(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
 
-                        <div className="space-y-6">
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">이름</label>
+                        <div className="space-y-4">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">이름 *</label>
                                 <input
-                                    className="neo-input w-full"
+                                    className="neo-input w-full py-2.5"
                                     placeholder="이름 입력"
                                     value={currentStaff.name || ''}
                                     onChange={e => setCurrentStaff({ ...currentStaff, name: e.target.value })}
                                 />
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">시급</label>
-                                <div className="relative">
-                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₩</span>
-                                    <input
-                                        className="neo-input w-full pl-10"
-                                        placeholder="0"
-                                        type="number"
-                                        value={currentStaff.hourlyWage || ''}
-                                        onChange={e => setCurrentStaff({ ...currentStaff, hourlyWage: Number(e.target.value) })}
-                                    />
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">연락처</label>
+                                <input
+                                    className="neo-input w-full py-2.5"
+                                    placeholder="010-0000-0000"
+                                    value={currentStaff.phone || ''}
+                                    onChange={e => setCurrentStaff({ ...currentStaff, phone: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">급여 체계</label>
+                                <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-100">
+                                    <button
+                                        type="button"
+                                        onClick={() => setCurrentStaff({ ...currentStaff, salaryType: 'hourly' })}
+                                        className={clsx(
+                                            "flex-1 py-2 text-sm font-bold rounded-lg transition-all",
+                                            (currentStaff.salaryType || 'hourly') === 'hourly' ? "bg-white text-[#3B82F6] shadow-sm" : "text-gray-400"
+                                        )}
+                                    >
+                                        시급제
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCurrentStaff({ ...currentStaff, salaryType: 'monthly' })}
+                                        className={clsx(
+                                            "flex-1 py-2 text-sm font-bold rounded-lg transition-all",
+                                            currentStaff.salaryType === 'monthly' ? "bg-white text-[#3B82F6] shadow-sm" : "text-gray-400"
+                                        )}
+                                    >
+                                        월급제
+                                    </button>
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                    {(currentStaff.salaryType || 'hourly') === 'hourly' ? '시급' : '월급'}
+                                </label>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₩</span>
+                                    {(currentStaff.salaryType || 'hourly') === 'hourly' ? (
+                                        <input
+                                            className="neo-input w-full pl-10 py-2.5"
+                                            placeholder="0"
+                                            type="number"
+                                            value={currentStaff.hourlyWage || ''}
+                                            onChange={e => setCurrentStaff({ ...currentStaff, hourlyWage: Number(e.target.value) })}
+                                        />
+                                    ) : (
+                                        <input
+                                            className="neo-input w-full pl-10 py-2.5"
+                                            placeholder="0"
+                                            type="number"
+                                            value={currentStaff.monthlySalary || ''}
+                                            onChange={e => setCurrentStaff({ ...currentStaff, monthlySalary: Number(e.target.value) })}
+                                        />
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="space-y-1.5">
                                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">직급</label>
                                 <select
-                                    className="neo-input w-full"
+                                    className="neo-input w-full py-2.5"
                                     value={currentStaff.rank || '알바'}
                                     onChange={e => setCurrentStaff({ ...currentStaff, rank: e.target.value })}
                                 >
@@ -154,17 +214,20 @@ export default function StaffPage() {
                                 </select>
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">직원 고유 색상</label>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">색상</label>
                                 <div className="flex flex-wrap gap-2 pt-1">
-                                    {['#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#6B7280'].map(c => (
+                                    {[
+                                        '#EF4444', '#F97316', '#F59E0B', '#10B981', '#3B82F6', 
+                                        '#6366F1', '#8B5CF6', '#EC4899'
+                                    ].map(c => (
                                         <button
                                             key={c}
                                             type="button"
                                             onClick={() => setCurrentStaff({ ...currentStaff, color: c })}
                                             className={clsx(
-                                                "w-8 h-8 rounded-full border-2 transition-all",
-                                                currentStaff.color === c ? "ring-2 ring-offset-2 ring-gray-900 border-white scale-110" : "border-transparent opacity-60 hover:opacity-100"
+                                                "w-8 h-8 rounded-full border-2 transition-all shadow-sm",
+                                                currentStaff.color === c ? "ring-2 ring-offset-2 ring-gray-900 border-white scale-110" : "border-transparent opacity-70 hover:opacity-100"
                                             )}
                                             style={{ backgroundColor: c }}
                                         />
@@ -172,24 +235,82 @@ export default function StaffPage() {
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-between py-2 border-t border-gray-50 pt-6">
-                                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">주휴수당 적용</span>
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={currentStaff.applyWeeklyAllowance ?? false}
-                                        onChange={e => setCurrentStaff({ ...currentStaff, applyWeeklyAllowance: e.target.checked })}
-                                        className="sr-only peer"
-                                    />
-                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3B82F6]"></div>
-                                </label>
+                            <div className="space-y-3 pt-4 border-t border-gray-50">
+                                <div className="flex justify-center mb-1">
+                                    <div className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-600 text-[9px] font-black px-2.5 py-1 rounded-full border border-blue-100">
+                                        <span className="relative flex h-2 w-2">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                                        </span>
+                                        {new Date().getFullYear()} 법정 기준 자동 업데이트 중
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">주휴수당</span>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={currentStaff.applyWeeklyAllowance ?? false}
+                                            onChange={e => setCurrentStaff({ ...currentStaff, applyWeeklyAllowance: e.target.checked })}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#3B82F6]"></div>
+                                    </label>
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">4대보험</span>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={currentStaff.applyInsurances ?? false}
+                                            onChange={e => setCurrentStaff({ ...currentStaff, applyInsurances: e.target.checked })}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                    </label>
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">야간수당</span>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={currentStaff.applyNightAllowance ?? false}
+                                            onChange={e => setCurrentStaff({ ...currentStaff, applyNightAllowance: e.target.checked })}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#8B5CF6]"></div>
+                                    </label>
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">휴일수당 (1.5배)</span>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={currentStaff.applyHolidayAllowance ?? false}
+                                            onChange={e => setCurrentStaff({ ...currentStaff, applyHolidayAllowance: e.target.checked })}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-600"></div>
+                                    </label>
+                                </div>
                             </div>
 
                             <button
                                 onClick={handleSave}
-                                className="neo-btn neo-btn-primary w-full py-4 text-lg font-bold mt-4 shadow-lg shadow-blue-500/20"
+                                className="neo-btn neo-btn-primary w-full py-3.5 text-base font-bold mt-2 shadow-lg shadow-blue-500/20"
                             >
-                                직원 정보 저장
+                                저장하기
                             </button>
                         </div>
                     </div>

@@ -65,7 +65,8 @@ export default function AttendancePage() {
     const calculateHours = (clockIn: string, clockOut: string) => {
         const [inH, inM] = clockIn.split(':').map(Number);
         const [outH, outM] = clockOut.split(':').map(Number);
-        const totalMinutes = (outH * 60 + outM) - (inH * 60 + inM);
+        let totalMinutes = (outH * 60 + outM) - (inH * 60 + inM);
+        if (totalMinutes < 0) totalMinutes += 24 * 60;
         const hours = totalMinutes / 60;
         return Number(hours.toFixed(1)).toString();
     };
@@ -103,57 +104,156 @@ export default function AttendancePage() {
 
     const handleCopyFromPreviousDay = (targetDate: Date) => {
         const prevDateStr = format(subDays(targetDate, 1), 'yyyy-MM-dd');
-        const targetDateStr = format(targetDate, 'yyyy-MM-dd');
+        handleDragCopy(prevDateStr, format(targetDate, 'yyyy-MM-dd'));
+    };
 
-        const prevRecords = attendance.filter(r => r.date === prevDateStr);
-        if (prevRecords.length === 0) {
-            alert('이전 날짜에 복사할 기록이 없습니다.');
+    const handleDragCopy = (sourceDateStr: string, targetDateStr: string) => {
+        if (sourceDateStr === targetDateStr) return;
+
+        // 1. Attendance 복사
+        const sourceRecords = attendance.filter(r => r.date === sourceDateStr);
+        const targetExistingStaff = attendance.filter(r => r.date === targetDateStr).map(r => r.staffId);
+        
+        let copiedCount = 0;
+        sourceRecords.forEach(r => {
+            if (!targetExistingStaff.includes(r.staffId)) {
+                saveAttendance({
+                    ...r,
+                    id: crypto.randomUUID(),
+                    date: targetDateStr
+                });
+                copiedCount++;
+            }
+        });
+
+        // 2. Memo 복사는 제외 (사용자 요청: 메모는 같이 복사가 안되게)
+        /*
+        const sourceMemos = memos.filter(m => m.date === sourceDateStr);
+        sourceMemos.forEach(m => {
+            saveMemo({
+                ...m,
+                id: crypto.randomUUID(),
+                date: targetDateStr
+            });
+            copiedCount++;
+        });
+        */
+
+        if (copiedCount > 0) {
+            setAttendance(getAttendance());
+            setMemos(getMemos());
+            syncToCloud();
+        }
+    };
+
+    // Drag and Drop States
+    const [draggedDate, setDraggedDate] = useState<string | null>(null);
+
+    const onDragStart = (e: React.DragEvent, dateStr: string) => {
+        setDraggedDate(dateStr);
+        e.dataTransfer.setData('sourceDate', dateStr);
+        e.dataTransfer.effectAllowed = 'copy';
+        
+        // Visual feedback
+        const target = e.currentTarget as HTMLElement;
+        target.classList.add('opacity-50');
+    };
+
+    const onDragEnd = (e: React.DragEvent) => {
+        const target = e.currentTarget as HTMLElement;
+        target.classList.remove('opacity-50');
+        setDraggedDate(null);
+    };
+
+    const onDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+    };
+
+    const onDrop = (e: React.DragEvent, targetDateStr: string) => {
+        e.preventDefault();
+        const sourceDate = e.dataTransfer.getData('sourceDate');
+        if (sourceDate && sourceDate !== targetDateStr) {
+            handleDragCopy(sourceDate, targetDateStr);
+        }
+    };
+
+    // Double Click to Copy Implementation
+    const [copySourceDate, setCopySourceDate] = useState<string | null>(null);
+    const [lastClickTime, setLastClickTime] = useState<number>(0);
+
+    const handleDateClick = (date: Date) => {
+        const dateStr = format(date, 'yyyy-MM-dd');
+        const now = Date.now();
+        
+        // 1. Paste Logic (If source is already selected)
+        if (copySourceDate) {
+            if (copySourceDate !== dateStr) {
+                handleDragCopy(copySourceDate, dateStr);
+                if (window.navigator.vibrate) window.navigator.vibrate(50);
+            }
+            setCopySourceDate(null);
             return;
         }
 
-        const newRecords = prevRecords.map(r => ({
-            ...r,
-            id: crypto.randomUUID(),
-            date: targetDateStr
-        }));
+        // 2. Double Click Detection
+        if (now - lastClickTime < 300) {
+            setCopySourceDate(dateStr);
+            if (window.navigator.vibrate) window.navigator.vibrate([50, 30, 50]);
+            setLastClickTime(0); // Reset
+            return;
+        }
 
-        const existingStaffOnDay = attendance.filter(r => r.date === targetDateStr).map(r => r.staffId);
-        const filteredNewRecords = newRecords.filter(r => !existingStaffOnDay.includes(r.staffId));
-
-        filteredNewRecords.forEach(r => saveAttendance(r));
-        setAttendance(getAttendance());
-        setSelectedDate(targetDate);
-        syncToCloud(); // Sync to cloud
+        // 3. Normal Click
+        setLastClickTime(now);
+        setSelectedDate(date);
     };
 
-
-
     return (
-        <div className="flex flex-col h-full bg-[#F9FAFB] overflow-hidden">
+        <div className="flex flex-col h-full bg-[#F9FAFB] dark:bg-gray-950 overflow-hidden transition-colors">
             {/* Header */}
-            <div className="p-6 flex items-center justify-between border-b border-gray-100 bg-white shadow-sm z-20">
-                <h1 className="text-xl font-bold text-gray-900" translate="no">근태기록</h1>
+            <div className="p-6 flex items-center justify-between border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm z-20 transition-colors">
+                <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100" translate="no">근태기록</h1>
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-                        className="w-9 h-9 rounded-lg border border-gray-100 flex items-center justify-center bg-white text-gray-500 hover:bg-gray-50 transition-colors shadow-sm"
+                        className="w-9 h-9 rounded-lg border border-gray-100 dark:border-gray-700 flex items-center justify-center bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
                     >
                         <ChevronLeft className="w-5 h-5" />
                     </button>
-                    <div className="px-4 py-1.5 font-bold text-gray-900 bg-white border border-gray-100 rounded-lg shadow-sm">
+                    <div className="px-4 py-1.5 font-bold text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg shadow-sm">
                         {format(currentMonth, 'yyyy.MM')}
                     </div>
                     <button
                         onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-                        className="w-9 h-9 rounded-lg border border-gray-100 flex items-center justify-center bg-white text-gray-500 hover:bg-gray-50 transition-colors shadow-sm"
+                        className="w-9 h-9 rounded-lg border border-gray-100 dark:border-gray-700 flex items-center justify-center bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
                     >
                         <ChevronRight className="w-5 h-5" />
                     </button>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-3 py-6 space-y-8">
-                {/* 3. Calendar Grid */}
+            <div className="flex-1 overflow-y-auto px-3 py-6 space-y-8 relative">
+                {copySourceDate && (
+                    <div className="fixed bottom-20 left-4 right-4 z-50 bg-blue-600 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between animate-in fade-in slide-in-from-bottom-4 duration-300 ring-4 ring-white/10">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center animate-pulse">
+                                <Copy className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold">{format(new Date(copySourceDate), 'M월 d일')} 복사 중</p>
+                                <p className="text-[11px] opacity-90">대상 날짜를 한 번 더 눌러주세요</p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={() => setCopySourceDate(null)}
+                            className="bg-white text-blue-600 px-4 py-2 rounded-xl text-xs font-bold shadow-sm hover:bg-blue-50 transition-colors"
+                        >
+                            취소
+                        </button>
+                    </div>
+                )}
+
                 <div className="space-y-4">
                     <div className="flex justify-between items-end">
                         <h3 className="text-lg font-bold flex items-center gap-2 text-gray-700">
@@ -179,12 +279,18 @@ export default function AttendancePage() {
                                 <div
                                     key={day.toISOString()}
                                     role="button"
-                                    onClick={() => setSelectedDate(day)}
-                                    data-date={day.toISOString()}
+                                    draggable
+                                    data-date={format(day, 'yyyy-MM-dd')}
+                                    onDragStart={(e) => onDragStart(e, format(day, 'yyyy-MM-dd'))}
+                                    onDragEnd={onDragEnd}
+                                    onDragOver={onDragOver}
+                                    onDrop={(e) => onDrop(e, format(day, 'yyyy-MM-dd'))}
+                                    onClick={() => handleDateClick(day)}
                                     className={clsx(
-                                        "min-h-[80px] p-2 flex flex-col items-start justify-start relative transition-all text-left group cursor-pointer",
+                                        "min-h-[80px] p-2 flex flex-col items-start justify-start relative transition-all text-left group cursor-pointer select-none",
                                         isSelected ? "bg-[#3B82F6]/5 ring-2 ring-inset ring-[#3B82F6] z-10" : "bg-white hover:bg-gray-50",
-                                        !isCurrentMonth && "opacity-30"
+                                        !isCurrentMonth && "opacity-30",
+                                        copySourceDate === format(day, 'yyyy-MM-dd') && "ring-4 ring-inset ring-blue-400 bg-blue-50/50 animate-pulse z-20"
                                     )}
                                 >
                                     <div className="flex flex-col w-full mb-1">
@@ -218,25 +324,17 @@ export default function AttendancePage() {
                                     <div className="w-full space-y-1 overflow-hidden">
                                         {dayRecords.slice(0, 3).map((r) => {
                                             const staff = staffList.find(s => s.id === r.staffId);
-
-                                            // Simple duration calculation
                                             let durationText = '';
                                             if (r.clockIn && r.clockOut) {
                                                 const [startH, startM] = r.clockIn.split(':').map(Number);
                                                 const [endH, endM] = r.clockOut.split(':').map(Number);
                                                 let diffMin = (endH * 60 + endM) - (startH * 60 + startM);
-                                                if (diffMin < 0) diffMin += 24 * 60; // Overnight
+                                                if (diffMin < 0) diffMin += 24 * 60;
                                                 const hours = diffMin / 60;
                                                 durationText = `${Number(hours.toFixed(1))}시간`;
                                             }
-
                                             return (
-                                                <div
-                                                    key={r.id}
-                                                    className={clsx(
-                                                        "w-full flex flex-col bg-white border border-gray-200 rounded p-[2px] hover:border-blue-400 hover:shadow-lg transition-all select-none"
-                                                    )}
-                                                >
+                                                <div key={r.id} className="w-full flex flex-col bg-white border border-gray-200 rounded p-[2px] hover:border-blue-400 hover:shadow-lg transition-all select-none">
                                                     <div className="flex items-center gap-[2px] w-full pointer-events-none overflow-hidden">
                                                         <div className="w-[3px] h-2.5 rounded-full shrink-0" style={{ backgroundColor: staff?.color || '#3B82F6' }} />
                                                         <span className="text-[8px] font-bold text-gray-900 tracking-tighter whitespace-nowrap leading-none">
@@ -268,10 +366,7 @@ export default function AttendancePage() {
                                             }}
                                         >
                                             {dayMemos.map((memo, mi) => (
-                                                <div
-                                                    key={mi}
-                                                    className="w-1.5 h-1.5 rounded-full shrink-0 bg-red-400 group-hover/schedule:bg-red-500 group-hover/schedule:scale-125 transition-all"
-                                                />
+                                                <div key={mi} className="w-1.5 h-1.5 rounded-full shrink-0 bg-lime-500 group-hover/schedule:bg-lime-600 group-hover/schedule:scale-125 transition-all" />
                                             ))}
                                         </div>
                                     )}
@@ -281,14 +376,10 @@ export default function AttendancePage() {
                     </div>
                 </div>
 
-                {/* Top Section: Schedule & Records (Side by Side) */}
-                <div className="grid grid-cols-2 gap-3">
-                    {/* 1. Owner's Schedule */}
+                <div className="grid grid-cols-2 gap-3 px-1">
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-sm font-bold text-gray-900" translate="no">
-                                사장님 메모
-                            </h2>
+                            <h2 className="text-sm font-bold text-gray-900" translate="no">사장님 메모</h2>
                             <button
                                 onClick={() => {
                                     setCurrentMemo({ date: format(selectedDate, 'yyyy-MM-dd'), type: 'memo' });
@@ -299,8 +390,7 @@ export default function AttendancePage() {
                                 <Plus className="w-3 h-3" />
                             </button>
                         </div>
-
-                        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 h-[150px] overflow-y-auto">
+                        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 overflow-y-auto">
                             {selectedDateMemos.length === 0 ? (
                                 <div className="h-full flex items-center justify-center border-2 border-dashed border-gray-100 rounded-xl font-medium text-gray-300 text-center text-sm">
                                     등록된 스케줄이 없습니다
@@ -308,29 +398,20 @@ export default function AttendancePage() {
                             ) : (
                                 <div className="space-y-3">
                                     {selectedDateMemos.map(memo => (
-                                        <div key={memo.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between group transition-all hover:ring-1 hover:ring-blue-100">
-                                            <div className="flex items-center gap-4">
-                                                <div className={clsx(
-                                                    "w-2 h-2 rounded-full shrink-0",
-                                                    memo.type === 'schedule' ? "bg-red-400" : "bg-green-400"
-                                                )} />
-                                                <div>
+                                        <div key={memo.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 group transition-all hover:ring-1 hover:ring-blue-100">
+                                            <div className="flex items-start sm:items-center gap-4">
+                                                <div className={clsx("w-2.5 h-2.5 rounded-full shrink-0 mt-1 sm:mt-0", memo.type === 'schedule' ? "bg-red-500" : "bg-lime-500")} />
+                                                <div className="min-w-0 flex-1">
                                                     <p className="text-sm font-bold text-gray-900">{memo.type === 'schedule' ? '일정' : '메모'}</p>
-                                                    <p className="text-[11px] font-medium text-gray-400 mt-1 whitespace-pre-wrap leading-relaxed">{memo.content}</p>
+                                                    <p className="text-[12px] font-medium text-gray-600 mt-1 whitespace-pre-wrap leading-relaxed break-words">{memo.content}</p>
                                                 </div>
                                             </div>
-                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                                                <button
-                                                    onClick={() => { setCurrentMemo(memo); setIsMemoEditing(true); }}
-                                                    className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-50 text-gray-400 hover:text-blue-500 hover:bg-white border border-transparent hover:border-blue-100"
-                                                >
-                                                    <Edit2 className="w-3.5 h-3.5" />
+                                            <div className="flex gap-1 justify-end shrink-0">
+                                                <button onClick={() => { setCurrentMemo(memo); setIsMemoEditing(true); }} className="w-9 h-9 rounded-lg flex items-center justify-center bg-gray-50 text-gray-400 hover:text-blue-500 hover:bg-white border border-transparent hover:border-blue-100 transition-all">
+                                                    <Edit2 className="w-4 h-4" />
                                                 </button>
-                                                <button
-                                                    onClick={() => { if (confirm('삭제할까요?')) { deleteMemo(memo.id); setMemos(getMemos()); syncToCloud(); } }}
-                                                    className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-50 text-gray-400 hover:text-red-500 hover:bg-white border border-transparent hover:border-red-100"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                <button onClick={() => { if (confirm('삭제할까요?')) { deleteMemo(memo.id); setMemos(getMemos()); syncToCloud(); } }} className="w-9 h-9 rounded-lg flex items-center justify-center bg-gray-50 text-gray-400 hover:text-red-500 hover:bg-white border border-transparent hover:border-red-100 transition-all">
+                                                    <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
                                         </div>
@@ -340,27 +421,13 @@ export default function AttendancePage() {
                         </div>
                     </div>
 
-                    {/* 2. Daily Records */}
                     <div className="space-y-4">
                         <div className="flex items-center justify-between flex-nowrap gap-1">
-                            <h2 className="text-[11px] font-bold text-gray-900 whitespace-nowrap">
-                                {format(selectedDate, 'M월 d일')}
-                            </h2>
+                            <h2 className="text-[11px] font-bold text-gray-900 whitespace-nowrap">{format(selectedDate, 'M월 d일')}</h2>
                             <div className="flex gap-1 shrink-0">
                                 <button
-                                    onClick={() => handleCopyFromPreviousDay(selectedDate)}
-                                    className="neo-btn bg-white text-[8px] h-7 px-1.5 border-gray-100 whitespace-nowrap"
-                                >
-                                    <Copy className="w-2.5 h-2.5" />
-                                </button>
-                                <button
                                     onClick={() => {
-                                        setCurrentRecord({
-                                            date: format(selectedDate, 'yyyy-MM-dd'),
-                                            clockIn: '09:00',
-                                            clockOut: '18:00',
-                                            breakMinutes: 0
-                                        } as Attendance);
+                                        setCurrentRecord({ date: format(selectedDate, 'yyyy-MM-dd'), clockIn: '09:00', clockOut: '18:00', breakMinutes: 0 } as Attendance);
                                         setIsEditing(true);
                                     }}
                                     className="neo-btn neo-btn-primary h-7 w-7 p-0 rounded-lg shadow-blue-500/10"
@@ -369,41 +436,42 @@ export default function AttendancePage() {
                                 </button>
                             </div>
                         </div>
-
-                        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 h-[150px] overflow-y-auto">
+                        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 overflow-y-auto">
                             {selectedDateRecords.length === 0 ? (
-                                <div className="h-full flex items-center justify-center border-2 border-dashed border-gray-100 rounded-xl font-medium text-gray-300 text-center text-sm">
-                                    기록 정보가 없습니다
-                                </div>
+                                <div className="h-full flex items-center justify-center border-2 border-dashed border-gray-100 rounded-xl font-medium text-gray-300 text-center text-sm">기록 정보가 없습니다</div>
                             ) : (
                                 <div className="space-y-3">
                                     {selectedDateRecords.map(record => (
-                                        <div key={record.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm relative group transition-all hover:ring-1 hover:ring-blue-100">
-                                            <div className="absolute top-2 right-2 flex gap-1">
-                                                <button
-                                                    onClick={() => { setCurrentRecord(record); setIsEditing(true); }}
-                                                    className="w-5 h-5 rounded flex items-center justify-center text-gray-300 hover:text-blue-500 hover:bg-gray-50 transition-all"
-                                                >
-                                                    <Edit2 className="w-2.5 h-2.5" />
-                                                </button>
-                                                <button
-                                                    onClick={() => { if (confirm('삭제할까요?')) { deleteAttendance(record.id); setAttendance(getAttendance()); syncToCloud(); } }}
-                                                    className="w-5 h-5 rounded flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-gray-50 transition-all"
-                                                >
-                                                    <Trash2 className="w-2.5 h-2.5" />
-                                                </button>
-                                            </div>
+                                        <div key={record.id} className="bg-white p-2.5 sm:p-3 rounded-2xl border border-gray-100 shadow-sm transition-all hover:ring-1 hover:ring-blue-100 relative">
+                                            <div className="flex gap-2">
+                                                {/* Color Dot */}
+                                                <div className="w-1.5 h-1.5 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: staffList.find(s => s.id === record.staffId)?.color || '#3B82F6' }} />
+                                                
+                                                <div className="flex-1 min-w-0 pr-11 sm:pr-16">
+                                                    {/* Name: Responsive font size */}
+                                                    <h4 className="text-[12px] sm:text-[14px] font-bold text-gray-900 leading-tight mb-1 sm:mb-1.5 truncate">
+                                                        {getStaffName(record.staffId)}
+                                                    </h4>
 
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: staffList.find(s => s.id === record.staffId)?.color || '#3B82F6' }} />
-                                                <div className="min-w-0 pr-12">
-                                                    <p className="text-sm font-bold text-gray-900 break-keep leading-tight">{getStaffName(record.staffId)}</p>
-                                                    <div className="flex items-center gap-x-2 gap-y-1 mt-1 flex-wrap">
-                                                        <span className="text-[11px] font-medium text-gray-400 whitespace-nowrap">{record.clockIn} - {record.clockOut}</span>
-                                                        <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold whitespace-nowrap">
-                                                            {calculateHours(record.clockIn, record.clockOut)}시간
-                                                        </span>
+                                                    {/* Time and Duration Row */}
+                                                    <div className="flex flex-col gap-1 sm:gap-1.5">
+                                                        <span className="text-[9px] sm:text-[10px] font-medium text-gray-400 whitespace-nowrap">{record.clockIn} - {record.clockOut}</span>
+                                                        <div className="flex">
+                                                            <span className="text-[9px] sm:text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md font-bold whitespace-nowrap">
+                                                                {calculateHours(record.clockIn, record.clockOut)}시간
+                                                            </span>
+                                                        </div>
                                                     </div>
+                                                </div>
+
+                                                {/* Buttons: Tiny on mobile, normal on web, absolute corner */}
+                                                <div className="absolute top-1.5 right-1.5 sm:top-3 sm:right-3 flex gap-1">
+                                                    <button onClick={() => { setCurrentRecord(record); setIsEditing(true); }} className="w-5.5 h-5.5 sm:w-7 sm:h-7 rounded-md flex items-center justify-center text-blue-500 bg-blue-50 hover:bg-blue-100 transition-all border border-blue-100">
+                                                        <Edit2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                                                    </button>
+                                                    <button onClick={() => { if (confirm('삭제할까요?')) { deleteAttendance(record.id); setAttendance(getAttendance()); syncToCloud(); } }} className="w-5.5 h-5.5 sm:w-7 sm:h-7 rounded-md flex items-center justify-center text-red-500 bg-red-50 hover:bg-red-100 transition-all border border-red-100">
+                                                        <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
@@ -413,10 +481,9 @@ export default function AttendancePage() {
                         </div>
                     </div>
                 </div>
-
             </div>
 
-            {/* Modals */}
+            {/* Attendance Edit Modal */}
             {isEditing && (
                 <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white w-full max-w-sm p-8 rounded-2xl shadow-2xl border border-gray-100">
@@ -441,11 +508,65 @@ export default function AttendancePage() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">출근</label>
-                                    <input type="time" value={currentRecord.clockIn || ''} onChange={e => setCurrentRecord({ ...currentRecord, clockIn: e.target.value })} className="neo-input w-full" required />
+                                    <div className="flex items-center gap-1">
+                                        <select 
+                                            value={(currentRecord.clockIn || '09:00').split(':')[0]} 
+                                            onChange={e => {
+                                                const m = (currentRecord.clockIn || '09:00').split(':')[1];
+                                                setCurrentRecord({ ...currentRecord, clockIn: `${e.target.value}:${m}` });
+                                            }}
+                                            className="neo-input flex-1 px-2 text-center text-sm appearance-none"
+                                        >
+                                            {Array.from({ length: 24 }).map((_, i) => {
+                                                const val = i.toString().padStart(2, '0');
+                                                return <option key={val} value={val}>{val}시</option>;
+                                            })}
+                                        </select>
+                                        <span className="text-gray-300 font-bold">:</span>
+                                        <select 
+                                            value={(currentRecord.clockIn || '09:00').split(':')[1]} 
+                                            onChange={e => {
+                                                const h = (currentRecord.clockIn || '09:00').split(':')[0];
+                                                setCurrentRecord({ ...currentRecord, clockIn: `${h}:${e.target.value}` });
+                                            }}
+                                            className="neo-input flex-1 px-2 text-center text-sm appearance-none"
+                                        >
+                                            {['00', '10', '20', '30', '40', '50'].map(val => (
+                                                <option key={val} value={val}>{val}분</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">퇴근</label>
-                                    <input type="time" value={currentRecord.clockOut || ''} onChange={e => setCurrentRecord({ ...currentRecord, clockOut: e.target.value })} className="neo-input w-full" required />
+                                    <div className="flex items-center gap-1">
+                                        <select 
+                                            value={(currentRecord.clockOut || '18:00').split(':')[0]} 
+                                            onChange={e => {
+                                                const m = (currentRecord.clockOut || '18:00').split(':')[1];
+                                                setCurrentRecord({ ...currentRecord, clockOut: `${e.target.value}:${m}` });
+                                            }}
+                                            className="neo-input flex-1 px-2 text-center text-sm appearance-none"
+                                        >
+                                            {Array.from({ length: 24 }).map((_, i) => {
+                                                const val = i.toString().padStart(2, '0');
+                                                return <option key={val} value={val}>{val}시</option>;
+                                            })}
+                                        </select>
+                                        <span className="text-gray-300 font-bold">:</span>
+                                        <select 
+                                            value={(currentRecord.clockOut || '18:00').split(':')[1]} 
+                                            onChange={e => {
+                                                const h = (currentRecord.clockOut || '18:00').split(':')[0];
+                                                setCurrentRecord({ ...currentRecord, clockOut: `${h}:${e.target.value}` });
+                                            }}
+                                            className="neo-input flex-1 px-2 text-center text-sm appearance-none"
+                                        >
+                                            {['00', '10', '20', '30', '40', '50'].map(val => (
+                                                <option key={val} value={val}>{val}분</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                             <button type="submit" className="neo-btn neo-btn-primary w-full py-4 text-lg font-bold mt-6 shadow-lg shadow-blue-500/20">기록 저장</button>
@@ -476,10 +597,7 @@ export default function AttendancePage() {
                                             key={t}
                                             type="button"
                                             onClick={() => setCurrentMemo({ ...currentMemo, type: t as any })}
-                                            className={clsx(
-                                                "flex-1 py-2 rounded-lg font-bold text-xs uppercase transition-all",
-                                                currentMemo.type === t ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-600"
-                                            )}
+                                            className={clsx("flex-1 py-2 rounded-lg font-bold text-xs uppercase transition-all", currentMemo.type === t ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-600")}
                                         >
                                             {t === 'schedule' ? '일정' : '메모'}
                                         </button>
@@ -502,7 +620,6 @@ export default function AttendancePage() {
                 </div>
             )}
 
-            {/* Schedule Detail Modal */}
             {showScheduleModal && selectedScheduleDate && (
                 <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
                     <div className="bg-white w-full max-w-md p-8 rounded-2xl shadow-2xl border border-gray-100">
@@ -511,70 +628,39 @@ export default function AttendancePage() {
                                 <h3 className="text-xl font-bold text-gray-900">스케줄 상세</h3>
                                 <p className="text-sm text-gray-400 mt-1">{format(selectedScheduleDate, 'yyyy년 M월 d일')}</p>
                             </div>
-                            <button
-                                onClick={() => setShowScheduleModal(false)}
-                                className="text-gray-400 hover:text-gray-600 transition-colors"
-                            >
+                            <button onClick={() => setShowScheduleModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
-
                         <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                            {memos
-                                .filter(m => isSameDay(new Date(m.date), selectedScheduleDate))
-                                .map(memo => (
-                                    <div
-                                        key={memo.id}
-                                        className="bg-gradient-to-br from-white to-gray-50 p-4 rounded-xl border border-gray-100 shadow-sm"
-                                    >
-                                        <div className="flex items-start gap-3">
-                                            <div className={clsx(
-                                                "w-2 h-2 rounded-full shrink-0 mt-1.5",
-                                                memo.type === 'schedule' ? "bg-red-400" : "bg-green-400"
-                                            )} />
-                                            <div className="flex-1">
-                                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
-                                                    {memo.type === 'schedule' ? '일정' : '메모'}
-                                                </p>
-                                                <p className="text-sm font-medium text-gray-900 whitespace-pre-wrap leading-relaxed">
-                                                    {memo.content}
-                                                </p>
-                                            </div>
+                            {memos.filter(m => isSameDay(new Date(m.date), selectedScheduleDate)).map(memo => (
+                                <div key={memo.id} className="bg-gradient-to-br from-white to-gray-50 p-4 rounded-xl border border-gray-100 shadow-sm">
+                                    <div className="flex items-start gap-3">
+                                        <div className={clsx("w-2 h-2 rounded-full shrink-0 mt-1.5", memo.type === 'schedule' ? "bg-red-400" : "bg-green-400")} />
+                                        <div className="flex-1">
+                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">{memo.type === 'schedule' ? '일정' : '메모'}</p>
+                                            <p className="text-sm font-medium text-gray-900 whitespace-pre-wrap leading-relaxed">{memo.content}</p>
                                         </div>
                                     </div>
-                                ))
-                            }
+                                </div>
+                            ))}
                         </div>
-
-                        <button
-                            onClick={() => setShowScheduleModal(false)}
-                            className="neo-btn bg-gray-100 text-gray-700 hover:bg-gray-200 w-full py-3 text-sm font-bold mt-6"
-                        >
-                            닫기
-                        </button>
+                        <button onClick={() => setShowScheduleModal(false)} className="neo-btn bg-gray-100 text-gray-700 hover:bg-gray-200 w-full py-3 text-sm font-bold mt-6">닫기</button>
                     </div>
                 </div>
             )}
-            {/* Add Selection Modal */}
+
             {showAddSelectionModal && selectedAddDate && (
                 <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
                     <div className="bg-white w-full max-w-sm p-6 rounded-2xl shadow-2xl border border-gray-100 animate-in fade-in zoom-in duration-200">
                         <div className="text-center mb-6">
-                            <h3 className="text-lg font-bold text-gray-900">
-                                {format(selectedAddDate, 'M월 d일')} 추가
-                            </h3>
+                            <h3 className="text-lg font-bold text-gray-900">{format(selectedAddDate, 'M월 d일')} 추가</h3>
                             <p className="text-sm text-gray-400 mt-1">어떤 항목을 추가하시겠습니까?</p>
                         </div>
-
                         <div className="grid grid-cols-2 gap-3">
                             <button
                                 onClick={() => {
-                                    setCurrentRecord({
-                                        date: format(selectedAddDate, 'yyyy-MM-dd'),
-                                        clockIn: '09:00',
-                                        clockOut: '18:00',
-                                        breakMinutes: 0
-                                    } as Attendance);
+                                    setCurrentRecord({ date: format(selectedAddDate, 'yyyy-MM-dd'), clockIn: '09:00', clockOut: '18:00', breakMinutes: 0 } as Attendance);
                                     setIsEditing(true);
                                     setShowAddSelectionModal(false);
                                 }}
@@ -585,13 +671,9 @@ export default function AttendancePage() {
                                 </div>
                                 <span className="font-bold text-gray-700 group-hover:text-blue-700">근태기록</span>
                             </button>
-
                             <button
                                 onClick={() => {
-                                    setCurrentMemo({
-                                        date: format(selectedAddDate, 'yyyy-MM-dd'),
-                                        type: 'memo'
-                                    });
+                                    setCurrentMemo({ date: format(selectedAddDate, 'yyyy-MM-dd'), type: 'memo' });
                                     setIsMemoEditing(true);
                                     setShowAddSelectionModal(false);
                                 }}
@@ -603,17 +685,10 @@ export default function AttendancePage() {
                                 <span className="font-bold text-gray-700 group-hover:text-green-700">사장님 메모</span>
                             </button>
                         </div>
-
-                        <button
-                            onClick={() => setShowAddSelectionModal(false)}
-                            className="w-full mt-4 py-3 text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors"
-                        >
-                            취소
-                        </button>
+                        <button onClick={() => setShowAddSelectionModal(false)} className="w-full mt-4 py-3 text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors">취소</button>
                     </div>
                 </div>
             )}
         </div>
     );
-
 }

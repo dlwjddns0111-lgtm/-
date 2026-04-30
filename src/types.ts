@@ -13,7 +13,9 @@ export interface Staff {
     phone: string;
     role: string; // "manager", "staff", "part-time"
     rank: string; // "점장", "매니저", "직원", "알바"
+    salaryType: 'hourly' | 'monthly'; // 시급/월급 선택
     hourlyWage: number;
+    monthlySalary?: number; // 월급 금액
     payDay: number; // 1-31
     bankName: string;
     accountNumberMasked: string;
@@ -21,6 +23,9 @@ export interface Staff {
     endDate?: string;
     isActive: boolean;
     applyWeeklyAllowance: boolean;
+    applyInsurances: boolean; // 4대보험 적용 여부
+    applyNightAllowance: boolean; // 야간수당 적용 여부
+    applyHolidayAllowance: boolean; // 휴일수당 적용 여부
     color?: string;
     notes?: string;
 }
@@ -64,6 +69,8 @@ export interface PayrollItem {
     overtimeMinutes: number;
     overtimePay: number;
     weeklyAllowancePay: number;
+    nightShiftMinutes: number;
+    nightShiftPay: number;
     deductions: Deduction[];
     totalDeduction: number;
     netPay: number;

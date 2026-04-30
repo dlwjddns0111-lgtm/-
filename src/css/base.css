@@ -6,6 +6,10 @@ body {
     font-family: 'Inter', sans-serif;
     -webkit-font-smoothing: antialiased;
     min-height: 100vh;
+    overflow-x: hidden;
+    width: 100%;
+    position: relative;
+    touch-action: manipulation;
 }
 
 h1,

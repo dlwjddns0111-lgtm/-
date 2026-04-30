@@ -2,6 +2,21 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
+// @ts-ignore
+import { registerSW } from 'virtual:pwa-register'
+
+// Force immediate update of Service Worker
+/*
+registerSW({
+  onNeedRefresh() {
+    console.log('New content available, reloading...');
+    window.location.reload();
+  },
+  onOfflineReady() {
+    console.log('App ready to work offline');
+  },
+});
+*/
 
 // Load Kakao SDK before rendering
 const script = document.createElement('script');
@@ -10,6 +25,10 @@ script.async = false;
 document.head.appendChild(script);
 
 script.onload = () => {
+    if (window.Kakao && !window.Kakao.isInitialized()) {
+        window.Kakao.init(import.meta.env.VITE_KAKAO_JS_KEY);
+        console.log('Kakao SDK Initialized');
+    }
     ReactDOM.createRoot(document.getElementById('root')!).render(
         <App />
     )

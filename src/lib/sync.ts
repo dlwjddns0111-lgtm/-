@@ -123,9 +123,12 @@ export const subscribeToCloud = (onChanged: (wasUpdated: boolean) => void) => {
                     let changed = false;
 
                     const syncField = (storageKey: string, cloudValue: any) => {
-                        const localStr = localStorage.getItem(storageKey);
-                        const cloudStr = JSON.stringify(cloudValue || (storageKey === 'storeName' ? '' : []));
-                        if (localStr !== cloudStr) {
+                        const localValue = localStorage.getItem(storageKey);
+                        const cloudStr = typeof cloudValue === 'string' 
+                            ? cloudValue 
+                            : JSON.stringify(cloudValue || []);
+                        
+                        if (localValue !== cloudStr) {
                             localStorage.setItem(storageKey, cloudStr);
                             changed = true;
                         }

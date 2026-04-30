@@ -87,13 +87,15 @@ export const seedData = () => {
         const dummyStaff: Staff[] = [
             {
                 id: 's1', shopId: 'default', name: '김알바', phone: '010-1234-5678', role: 'staff', rank: '알바',
-                hourlyWage: 9860, payDay: 10, bankName: '국민', accountNumberMasked: '123***',
+                salaryType: 'hourly', hourlyWage: 9860, payDay: 10, bankName: '국민', accountNumberMasked: '123***',
                 startDate: '2024-01-01', isActive: true, applyWeeklyAllowance: true,
+                applyInsurances: false, applyNightAllowance: true, applyHolidayAllowance: true,
             },
             {
                 id: 's2', shopId: 'default', name: '이매니저', phone: '010-9876-5432', role: 'manager', rank: '매니저',
-                hourlyWage: 13000, payDay: 10, bankName: '신한', accountNumberMasked: '456***',
+                salaryType: 'hourly', hourlyWage: 13000, payDay: 10, bankName: '신한', accountNumberMasked: '456***',
                 startDate: '2024-01-01', isActive: true, applyWeeklyAllowance: true,
+                applyInsurances: true, applyNightAllowance: true, applyHolidayAllowance: true,
             }
         ];
         localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(dummyStaff));
