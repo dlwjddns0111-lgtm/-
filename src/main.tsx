@@ -6,17 +6,16 @@ import './index.css'
 import { registerSW } from 'virtual:pwa-register'
 
 // Force immediate update of Service Worker
-/*
 registerSW({
   onNeedRefresh() {
-    console.log('New content available, reloading...');
-    window.location.reload();
+    if (confirm('새로운 버전이 업데이트되었습니다. 지금 반영할까요?')) {
+      window.location.reload();
+    }
   },
   onOfflineReady() {
     console.log('App ready to work offline');
   },
 });
-*/
 
 // Load Kakao SDK before rendering
 const script = document.createElement('script');

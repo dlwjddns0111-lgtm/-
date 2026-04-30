@@ -15,6 +15,15 @@ export default function PayrollPage() {
     const [isCapturing, setIsCapturing] = useState(false);
     const slipRef = useRef<HTMLDivElement>(null);
 
+    const fallbackDownload = (blob: Blob, fileName: string) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.download = fileName;
+        link.href = url;
+        link.click();
+        alert('이미지가 저장되었습니다. 카카오톡 PC버전 등에서 파일을 직접 전송해 주세요.');
+    };
+
     const handleShareAsImage = async (item: PayrollItem) => {
         if (!slipRef.current) return;
         
@@ -34,25 +43,45 @@ export default function PayrollPage() {
             const fileName = `급여명세서_${item.staffName}_${month}.png`;
             const file = new File([blob], fileName, { type: 'image/png' });
 
-            // 모바일 네이티브 공유 API 사용 (카톡 포함 모든 앱으로 사진 전송 가능)
-            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({
-                    files: [file],
-                    title: `${item.staffName}님 급여명세서`,
-                    text: `${month} 급여 정산 내역입니다.`,
-                });
+            // 카카오 SDK 우선 실행 (PC/모바일 공통)
+            if (window.Kakao && window.Kakao.isInitialized()) {
+                try {
+                    const response = await window.Kakao.Share.uploadImage({ file: [file] });
+                    const imageUrl = response.infos.original.url;
+                    
+                    window.Kakao.Share.sendDefault({
+                        objectType: 'feed',
+                        content: {
+                            title: `${item.staffName}님 급여명세서`,
+                            description: `${month} 급여 정산 내역입니다.`,
+                            imageUrl: imageUrl,
+                            link: { mobileWebUrl: window.location.origin, webUrl: window.location.origin },
+                        },
+                        buttons: [{
+                            title: '앱 열기',
+                            link: { mobileWebUrl: window.location.origin, webUrl: window.location.origin },
+                        }],
+                    });
+                } catch (kakaoErr) {
+                    console.error('Kakao Share Error:', kakaoErr);
+                    // 카카오 실패 시에만 네이티브 공유 시도
+                    if (navigator.share) {
+                        await navigator.share({ files: [file], title: item.staffName, text: month });
+                    } else {
+                        fallbackDownload(blob, fileName);
+                    }
+                }
             } else {
-                // 데스크탑이나 미지원 브라우저의 경우 다운로드 처리
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.download = fileName;
-                link.href = url;
-                link.click();
-                alert('이미지가 저장되었습니다. 카카오톡 PC버전 등에서 파일을 전송해 주세요.');
+                // 카카오 SDK 로드 전인 경우 네이티브 공유 시도
+                if (navigator.share) {
+                    await navigator.share({ files: [file], title: item.staffName, text: month });
+                } else {
+                    fallbackDownload(blob, fileName);
+                }
             }
         } catch (err) {
             console.error('Share Error:', err);
-            alert('이미지 생성 중 오류가 발생했습니다.');
+            alert('이미지 생성 또는 공유 중 오류가 발생했습니다.');
         } finally {
             setIsCapturing(false);
         }
