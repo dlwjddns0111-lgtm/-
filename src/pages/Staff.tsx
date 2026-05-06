@@ -2,51 +2,62 @@ import { useState, useEffect } from 'react';
 import { getStaff, saveStaff, deleteStaff } from '../lib/storage';
 import { syncToCloud } from '../lib/sync';
 import { Staff } from '../types';
-import { Plus, Edit2, Trash2, User, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, User, X, CheckCircle2, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export default function StaffPage() {
     const [staffList, setStaffList] = useState<Staff[]>([]);
     const [isEditing, setIsEditing] = useState(false);
     const [currentStaff, setCurrentStaff] = useState<Partial<Staff>>({});
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState(false);
 
     useEffect(() => {
         setStaffList(getStaff().filter(s => s.isActive !== false));
     }, []);
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!currentStaff.name) return alert('이름을 입력하세요.');
         if ((currentStaff.salaryType || 'hourly') === 'hourly' && !currentStaff.hourlyWage) return alert('시급을 입력하세요.');
         if (currentStaff.salaryType === 'monthly' && !currentStaff.monthlySalary) return alert('월급을 입력하세요.');
 
-        const newStaff: Staff = {
-            id: currentStaff.id || crypto.randomUUID(),
-            shopId: 'default',
-            name: currentStaff.name as string,
-            phone: currentStaff.phone || '',
-            role: 'staff',
-            rank: currentStaff.rank || '알바',
-            salaryType: currentStaff.salaryType || 'hourly',
-            hourlyWage: Number(currentStaff.hourlyWage || 0),
-            monthlySalary: Number(currentStaff.monthlySalary || 0),
-            payDay: 10,
-            bankName: '',
-            accountNumberMasked: '',
-            startDate: currentStaff.startDate || new Date().toISOString().split('T')[0],
-            isActive: true,
-            applyWeeklyAllowance: currentStaff.applyWeeklyAllowance ?? false,
-            applyInsurances: currentStaff.applyInsurances ?? false,
-            applyNightAllowance: currentStaff.applyNightAllowance ?? false,
-            applyHolidayAllowance: currentStaff.applyHolidayAllowance ?? false,
-            color: currentStaff.color || '#3B82F6',
-            notes: currentStaff.notes || ''
-        };
+        setIsSaving(true);
+        try {
+            const newStaff: Staff = {
+                id: currentStaff.id || crypto.randomUUID(),
+                shopId: 'default',
+                name: currentStaff.name as string,
+                phone: currentStaff.phone || '',
+                role: 'staff',
+                rank: currentStaff.rank || '알바',
+                salaryType: currentStaff.salaryType || 'hourly',
+                hourlyWage: Number(currentStaff.hourlyWage || 0),
+                monthlySalary: Number(currentStaff.monthlySalary || 0),
+                payDay: 10,
+                bankName: '',
+                accountNumberMasked: '',
+                startDate: currentStaff.startDate || new Date().toISOString().split('T')[0],
+                isActive: true,
+                applyWeeklyAllowance: currentStaff.applyWeeklyAllowance ?? false,
+                applyInsurances: currentStaff.applyInsurances ?? false,
+                applyNightAllowance: currentStaff.applyNightAllowance ?? false,
+                applyHolidayAllowance: currentStaff.applyHolidayAllowance ?? false,
+                color: currentStaff.color || '#3B82F6',
+                notes: currentStaff.notes || ''
+            };
 
-        saveStaff(newStaff);
-        setStaffList(getStaff().filter(s => s.isActive !== false));
-        syncToCloud();
-        setIsEditing(false);
-        setCurrentStaff({});
+            saveStaff(newStaff);
+            setStaffList(getStaff().filter(s => s.isActive !== false));
+            await syncToCloud(); // 클라우드 업로드 완료까지 대기
+            setSaveSuccess(true);
+            setTimeout(() => {
+                setSaveSuccess(false);
+                setIsEditing(false);
+                setCurrentStaff({});
+            }, 800);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleDelete = (id: string) => {
@@ -308,9 +319,21 @@ export default function StaffPage() {
 
                             <button
                                 onClick={handleSave}
-                                className="neo-btn neo-btn-primary w-full py-3.5 text-base font-bold mt-2 shadow-lg shadow-blue-500/20"
+                                disabled={isSaving}
+                                className={clsx(
+                                    "neo-btn neo-btn-primary w-full py-3.5 text-base font-bold mt-2 shadow-lg shadow-blue-500/20 transition-all",
+                                    isSaving && "opacity-70 cursor-not-allowed"
+                                )}
                             >
-                                저장하기
+                                {isSaving ? (
+                                    <span className="flex items-center justify-center gap-2">
+                                        <Loader2 className="w-4 h-4 animate-spin" /> 저장 중...
+                                    </span>
+                                ) : saveSuccess ? (
+                                    <span className="flex items-center justify-center gap-2">
+                                        <CheckCircle2 className="w-4 h-4" /> 저장 완료!
+                                    </span>
+                                ) : '저장하기'}
                             </button>
                         </div>
                     </div>
