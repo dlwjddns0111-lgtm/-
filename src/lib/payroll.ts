@@ -83,7 +83,10 @@ export const computePayrollItem = (
         const recordDate = parse(record.date, 'yyyy-MM-dd', new Date());
         const isHoliday = isKoreanHoliday(recordDate);
         
-        const net = computeWorkMinutes(record.clockIn, record.clockOut);
+        const rawMinutes = computeWorkMinutes(record.clockIn, record.clockOut);
+        const rest = record.breakMinutes || staff.defaultRestMinutes || 0;
+        const net = Math.max(0, rawMinutes - rest);
+        
         const night = computeNightMinutes(record.clockIn, record.clockOut);
         
         let dailyOvertime = 0;

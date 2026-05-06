@@ -26,6 +26,7 @@ export interface Staff {
     applyInsurances: boolean; // 4대보험 적용 여부
     applyNightAllowance: boolean; // 야간수당 적용 여부
     applyHolidayAllowance: boolean; // 휴일수당 적용 여부
+    defaultRestMinutes?: number; // 기본 휴게시간 (분)
     color?: string;
     notes?: string;
 }

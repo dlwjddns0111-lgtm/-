@@ -1,18 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { getStaff, getAttendance, getSettings } from '../lib/storage';
-import { computePayrollItem } from '../lib/payroll';
+import { computePayrollItem, computeSeverancePay, SeveranceResult } from '../lib/payroll';
 import { Staff, Attendance, PayrollItem, Deduction } from '../types';
-import { DollarSign, Download, Printer, X, FileText, Trash2, Share2 } from 'lucide-react';
+import { DollarSign, X, FileText, Trash2, Calculator, AlertCircle, ChevronRight, User } from 'lucide-react';
 import { syncToCloud } from '../lib/sync';
 import { format } from 'date-fns';
 import { toBlob } from 'html-to-image';
 
 export default function PayrollPage() {
+    const [tab, setTab] = useState<'payroll' | 'severance'>('payroll');
     const [payrollItems, setPayrollItems] = useState<PayrollItem[]>([]);
     const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'));
     const [staffList, setStaffList] = useState<Staff[]>([]);
     const [selectedItem, setSelectedItem] = useState<PayrollItem | null>(null);
     const [isCapturing, setIsCapturing] = useState(false);
+    // 퇴직금 상태
+    const [severanceStaff, setSeveranceStaff] = useState<Staff | null>(null);
+    const [retirementDate, setRetirementDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+    const [severanceResult, setSeveranceResult] = useState<SeveranceResult | null>(null);
     const slipRef = useRef<HTMLDivElement>(null);
 
     const fallbackDownload = (blob: Blob, fileName: string) => {
@@ -137,7 +142,7 @@ export default function PayrollPage() {
     };
 
     useEffect(() => {
-        setStaffList(getStaff());
+        setStaffList(getStaff().filter(s => s.isActive !== false));
         calculate();
     }, [month]);
 
@@ -162,18 +167,46 @@ export default function PayrollPage() {
 
     return (
         <div className="min-h-full bg-[#F9FAFB] dark:bg-gray-950 p-6 space-y-6 transition-colors">
-            <div className="flex justify-between items-center bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex-nowrap gap-3 transition-colors">
-                <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">급여 관리</h1>
-                <div className="flex items-center gap-2 shrink-0">
-                    <input
-                        type="month"
-                        value={month}
-                        onChange={e => setMonth(e.target.value)}
-                        className="neo-input py-1.5 px-2 text-sm bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-200 dark:border-gray-700"
-                    />
+            {/* 헤더 + 탭 */}
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden transition-colors">
+                <div className="flex justify-between items-center p-4 pb-0 gap-3">
+                    <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">정산 관리</h1>
+                    {tab === 'payroll' && (
+                        <input
+                            type="month"
+                            value={month}
+                            onChange={e => setMonth(e.target.value)}
+                            className="neo-input py-1.5 px-2 text-sm bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-200 dark:border-gray-700"
+                        />
+                    )}
+                </div>
+                {/* 탭 버튼 */}
+                <div className="flex gap-1 p-3">
+                    <button
+                        onClick={() => setTab('payroll')}
+                        className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${
+                            tab === 'payroll'
+                                ? 'bg-[#3B82F6] text-white shadow-md shadow-blue-500/20'
+                                : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                        }`}
+                    >
+                        <DollarSign className="w-4 h-4" /> 월급 명세
+                    </button>
+                    <button
+                        onClick={() => setTab('severance')}
+                        className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${
+                            tab === 'severance'
+                                ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+                                : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                        }`}
+                    >
+                        <Calculator className="w-4 h-4" /> 퇴직금
+                    </button>
                 </div>
             </div>
 
+            {/* 급여 탭 */}
+            {tab === 'payroll' && (
             <div className="space-y-4">
                 {payrollItems.length === 0 ? (
                     <div className="p-20 bg-white rounded-3xl border-2 border-dashed border-gray-100 text-center">
@@ -248,7 +281,87 @@ export default function PayrollPage() {
                     </>
                 )}
             </div>
+            )}
 
+            {/* 퇴직금 탭 */}
+            {tab === 'severance' && (
+            <div className="space-y-4">
+                {staffList.length === 0 ? (
+                    <div className="p-20 bg-white rounded-3xl border-2 border-dashed border-gray-100 text-center">
+                        <Calculator className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+                        <p className="text-gray-400 font-medium">등록된 직원이 없습니다</p>
+                    </div>
+                ) : (
+                    <>
+                        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
+                            <p className="text-xs font-bold text-amber-700">퇴직금 계산 기준</p>
+                            <p className="text-[11px] text-amber-600 mt-1">• 1년 이상 근무 + 주 15시간 이상 시 지급 의무</p>
+                            <p className="text-[11px] text-amber-600">• 퇴직금 = 평균임금 × 30일 × (재직일수 ÷ 365)</p>
+                            <p className="text-[11px] text-amber-600">• 평균임금 = 최근 3개월 임금 합계 ÷ 해당 일수</p>
+                        </div>
+                        {staffList.map(staff => {
+                            const sv = computeSeverancePay(staff);
+                            return (
+                                <div key={staff.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                                    <div className="flex items-center justify-between p-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: staff.color || '#3B82F6' }}>
+                                                {staff.name[0]}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-gray-900 text-sm">{staff.name}</p>
+                                                <p className="text-[10px] text-gray-400">
+                                                    {staff.startDate ? `입사: ${staff.startDate}` : <span className="text-red-400">입사일 미입력</span>}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {sv.eligible ? (
+                                            <div className="text-right">
+                                                <p className="text-xs text-orange-500 font-bold">지급 대상</p>
+                                                <p className="text-lg font-black text-orange-600">{sv.severancePay.toLocaleString()}<span className="text-sm">원</span></p>
+                                            </div>
+                                        ) : sv.workingDays > 0 ? (
+                                            <div className="text-right">
+                                                <p className="text-xs text-gray-400 font-bold">미발생</p>
+                                                <p className="text-sm font-bold text-gray-400">{365 - sv.workingDays}일 남음</p>
+                                            </div>
+                                        ) : (
+                                            <div className="text-right">
+                                                <p className="text-xs text-red-400 font-bold">입사일 없음</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {sv.eligible && (
+                                        <div className="border-t border-gray-50 bg-gray-50 px-4 py-3 grid grid-cols-3 gap-2">
+                                            <div className="text-center">
+                                                <p className="text-[9px] text-gray-400 font-bold">재직일수</p>
+                                                <p className="text-xs font-black text-gray-700">{sv.workingDays}일</p>
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-[9px] text-gray-400 font-bold">평균임금(1일)</p>
+                                                <p className="text-xs font-black text-gray-700">{sv.avgDailyWage.toLocaleString()}원</p>
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-[9px] text-gray-400 font-bold">3개월 임금합계</p>
+                                                <p className="text-xs font-black text-gray-700">{sv.last3MonthsWage.toLocaleString()}원</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {!sv.eligible && sv.workingDays > 0 && (
+                                        <div className="border-t border-gray-50 bg-gray-50 px-4 py-2">
+                                            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                                <div className="bg-orange-400 h-1.5 rounded-full transition-all" style={{ width: `${Math.min((sv.workingDays / 365) * 100, 100)}%` }} />
+                                            </div>
+                                            <p className="text-[9px] text-gray-400 text-center mt-1">{sv.workingDays}일 / 365일 ({Math.floor((sv.workingDays / 365) * 100)}%)</p>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </>
+                )}
+            </div>
+            )}
             {/* Payslip Modal */}
             {selectedItem && (
                 <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">

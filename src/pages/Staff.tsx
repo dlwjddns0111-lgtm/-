@@ -49,6 +49,7 @@ export default function StaffPage() {
                 applyInsurances: currentStaff.applyInsurances ?? false,
                 applyNightAllowance: currentStaff.applyNightAllowance ?? false,
                 applyHolidayAllowance: currentStaff.applyHolidayAllowance ?? false,
+                defaultRestMinutes: Number(currentStaff.defaultRestMinutes || 0),
                 color: currentStaff.color || '#3B82F6',
                 notes: currentStaff.notes || ''
             };
@@ -304,6 +305,23 @@ export default function StaffPage() {
                                     <option value="직원">직원</option>
                                     <option value="알바">알바</option>
                                 </select>
+                            </div>
+
+                            <div className="space-y-1.5 bg-gray-50 border border-gray-100 rounded-xl p-3">
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                                    기본 휴게시간 (분)
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        type="number"
+                                        className="neo-input w-full py-2.5 pr-10"
+                                        placeholder="0"
+                                        value={currentStaff.defaultRestMinutes || ''}
+                                        onChange={e => setCurrentStaff({ ...currentStaff, defaultRestMinutes: Number(e.target.value) })}
+                                    />
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">분</span>
+                                </div>
+                                <p className="text-[10px] text-gray-400 mt-1">※ 근무 시간 계산 시 설정한 시간만큼 자동 차감됩니다.</p>
                             </div>
 
                             <div className="space-y-1.5">
