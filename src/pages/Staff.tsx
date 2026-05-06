@@ -139,31 +139,52 @@ export default function StaffPage() {
                                 </div>
                             </div>
 
-                            {/* 퇴직금 미리보기 배지 */}
-                            <button
-                                onClick={() => openSeverance(staff)}
-                                className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-100 hover:from-amber-100 hover:to-orange-100 transition-all group mt-1"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <Calculator className="w-4 h-4 text-amber-500" />
-                                    <span className="text-xs font-bold text-amber-700">퇴직금 계산</span>
-                                    {staff.startDate && (
-                                        <span className="text-[10px] text-amber-500">
-                                            {staff.startDate} 입사
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                    {sv.eligible ? (
-                                        <span className="text-sm font-black text-orange-600">
-                                            {sv.severancePay.toLocaleString()}원
-                                        </span>
-                                    ) : (
-                                        <span className="text-[10px] font-bold text-gray-400">1년 미만</span>
-                                    )}
-                                    <ChevronRight className="w-3.5 h-3.5 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
-                                </div>
-                            </button>
+                            {/* 퇴직금 현황 - 항상 보이는 섹션 */}
+                            <div className="mt-3 border-t border-gray-50 pt-3">
+                                {!staff.startDate ? (
+                                    // 입사일 없음 → 경고
+                                    <button
+                                        onClick={() => { setCurrentStaff(staff); setIsEditing(true); }}
+                                        className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-50 border border-red-100 hover:bg-red-100 transition-colors"
+                                    >
+                                        <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                                        <span className="text-xs font-bold text-red-500">입사일 미입력 → 탭하여 입력</span>
+                                        <span className="text-[10px] text-red-300 ml-auto">(퇴직금 계산 불가)</span>
+                                    </button>
+                                ) : sv.eligible ? (
+                                    // 1년 이상 → 퇴직금 발생
+                                    <button
+                                        onClick={() => openSeverance(staff)}
+                                        className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 hover:from-orange-100 hover:to-amber-100 transition-all"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+                                            <span className="text-xs font-bold text-orange-700">퇴직금 지급 대상</span>
+                                            <span className="text-[10px] text-orange-400">{sv.workingDays}일 근무</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-sm font-black text-orange-600">{sv.severancePay.toLocaleString()}원</span>
+                                            <ChevronRight className="w-3.5 h-3.5 text-orange-300" />
+                                        </div>
+                                    </button>
+                                ) : (
+                                    // 1년 미만 → 아직 미발생
+                                    <button
+                                        onClick={() => openSeverance(staff)}
+                                        className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-100 hover:bg-gray-100 transition-colors"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-gray-300" />
+                                            <span className="text-xs font-bold text-gray-400">퇴직금 미발생</span>
+                                            <span className="text-[10px] text-gray-300">{sv.workingDays}일 / 365일</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-[10px] text-gray-300">{(365 - sv.workingDays)}일 후 발생</span>
+                                            <ChevronRight className="w-3.5 h-3.5 text-gray-200" />
+                                        </div>
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     );
                 })}
@@ -191,6 +212,24 @@ export default function StaffPage() {
                                 />
                             </div>
 
+                            {/* 입사일 - 퇴직금 계산 핵심 필드 */}
+                            <div className="space-y-1.5 bg-orange-50 border border-orange-100 rounded-xl p-3">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs font-bold text-orange-600 uppercase tracking-widest flex items-center gap-1">
+                                        <Calculator className="w-3 h-3" />
+                                        입사일 * <span className="text-red-400">(필수)</span>
+                                    </label>
+                                    <span className="text-[10px] text-orange-400 font-medium">퇴직금 계산 기준</span>
+                                </div>
+                                <input
+                                    type="date"
+                                    className="neo-input w-full py-2.5 border-orange-200 focus:ring-orange-300"
+                                    value={currentStaff.startDate || ''}
+                                    onChange={e => setCurrentStaff({ ...currentStaff, startDate: e.target.value })}
+                                />
+                                <p className="text-[10px] text-orange-400">1년 이상 근무 시 퇴직금 자동 계산됩니다</p>
+                            </div>
+
                             <div className="space-y-1.5">
                                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">연락처</label>
                                 <input
@@ -198,16 +237,6 @@ export default function StaffPage() {
                                     placeholder="010-0000-0000"
                                     value={currentStaff.phone || ''}
                                     onChange={e => setCurrentStaff({ ...currentStaff, phone: e.target.value })}
-                                />
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">입사일</label>
-                                <input
-                                    type="date"
-                                    className="neo-input w-full py-2.5"
-                                    value={currentStaff.startDate || ''}
-                                    onChange={e => setCurrentStaff({ ...currentStaff, startDate: e.target.value })}
                                 />
                             </div>
 
