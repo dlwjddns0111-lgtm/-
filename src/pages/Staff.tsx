@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { getStaff, saveStaff, deleteStaff } from '../lib/storage';
 import { syncToCloud } from '../lib/sync';
+import { computeSeverancePay, SeveranceResult } from '../lib/payroll';
 import { Staff } from '../types';
-import { Plus, Edit2, Trash2, User, X, CheckCircle2, Loader2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, User, X, CheckCircle2, Loader2, Calculator, AlertCircle, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
+import { format } from 'date-fns';
 
 export default function StaffPage() {
     const [staffList, setStaffList] = useState<Staff[]>([]);
@@ -11,6 +13,11 @@ export default function StaffPage() {
     const [currentStaff, setCurrentStaff] = useState<Partial<Staff>>({});
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
+
+    // 퇴직금 계산기 상태
+    const [severanceStaff, setSeveranceStaff] = useState<Staff | null>(null);
+    const [retirementDate, setRetirementDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+    const [severanceResult, setSeveranceResult] = useState<SeveranceResult | null>(null);
 
     useEffect(() => {
         setStaffList(getStaff().filter(s => s.isActive !== false));
@@ -48,7 +55,7 @@ export default function StaffPage() {
 
             saveStaff(newStaff);
             setStaffList(getStaff().filter(s => s.isActive !== false));
-            await syncToCloud(); // 클라우드 업로드 완료까지 대기
+            await syncToCloud();
             setSaveSuccess(true);
             setTimeout(() => {
                 setSaveSuccess(false);
@@ -68,6 +75,13 @@ export default function StaffPage() {
         }
     };
 
+    const openSeverance = (staff: Staff) => {
+        setSeveranceStaff(staff);
+        const today = format(new Date(), 'yyyy-MM-dd');
+        setRetirementDate(today);
+        setSeveranceResult(computeSeverancePay(staff, today));
+    };
+
     return (
         <div className="min-h-full bg-[#F9FAFB] dark:bg-gray-950 p-6 space-y-6 transition-colors">
             <div className="flex justify-between items-center bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors">
@@ -81,53 +95,81 @@ export default function StaffPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-4">
-                {staffList.map(staff => (
-                    <div key={staff.id} className="neo-card bg-white dark:bg-gray-900 p-6 flex flex-col justify-between border-none ring-1 ring-gray-100 dark:ring-gray-800 shadow-sm hover:shadow-md transition-all">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-3">
-                                <div
-                                    className="w-10 h-10 rounded-full flex items-center justify-center text-white ring-4 ring-offset-2 ring-transparent"
-                                    style={{ backgroundColor: staff.color || '#3B82F6' }}
-                                >
-                                    <User className="w-5 h-5" />
-                                </div>
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">{staff.name}</h3>
-                                        <span className="neo-badge dark:bg-gray-800 dark:text-gray-300">
-                                            {staff.rank}
-                                        </span>
+                {staffList.map(staff => {
+                    const sv = computeSeverancePay(staff);
+                    return (
+                        <div key={staff.id} className="neo-card bg-white dark:bg-gray-900 p-6 flex flex-col justify-between border-none ring-1 ring-gray-100 dark:ring-gray-800 shadow-sm hover:shadow-md transition-all">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div
+                                        className="w-10 h-10 rounded-full flex items-center justify-center text-white ring-4 ring-offset-2 ring-transparent"
+                                        style={{ backgroundColor: staff.color || '#3B82F6' }}
+                                    >
+                                        <User className="w-5 h-5" />
                                     </div>
-                                    <p className="text-xs text-gray-400 font-medium tracking-tight">
-                                        {staff.salaryType === 'monthly' 
-                                            ? `₩${(staff.monthlySalary || 0).toLocaleString()} / 월급`
-                                            : `₩${staff.hourlyWage.toLocaleString()} / 시급`
-                                        }
-                                    </p>
-                                    {staff.phone && (
-                                        <p className="text-[10px] text-gray-300 font-medium mt-0.5">{staff.phone}</p>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">{staff.name}</h3>
+                                            <span className="neo-badge dark:bg-gray-800 dark:text-gray-300">{staff.rank}</span>
+                                        </div>
+                                        <p className="text-xs text-gray-400 font-medium tracking-tight">
+                                            {staff.salaryType === 'monthly'
+                                                ? `₩${(staff.monthlySalary || 0).toLocaleString()} / 월급`
+                                                : `₩${staff.hourlyWage.toLocaleString()} / 시급`
+                                            }
+                                        </p>
+                                        {staff.phone && (
+                                            <p className="text-[10px] text-gray-300 font-medium mt-0.5">{staff.phone}</p>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => { setCurrentStaff(staff); setIsEditing(true); }}
+                                        className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-50 text-gray-500 hover:bg-[#3B82F6] hover:text-white transition-colors border border-gray-100"
+                                    >
+                                        <Edit2 className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(staff.id)}
+                                        className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-50 text-gray-500 hover:bg-red-500 hover:text-white transition-colors border border-gray-100"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* 퇴직금 미리보기 배지 */}
+                            <button
+                                onClick={() => openSeverance(staff)}
+                                className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-100 hover:from-amber-100 hover:to-orange-100 transition-all group mt-1"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <Calculator className="w-4 h-4 text-amber-500" />
+                                    <span className="text-xs font-bold text-amber-700">퇴직금 계산</span>
+                                    {staff.startDate && (
+                                        <span className="text-[10px] text-amber-500">
+                                            {staff.startDate} 입사
+                                        </span>
                                     )}
                                 </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => { setCurrentStaff(staff); setIsEditing(true); }}
-                                    className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-50 text-gray-500 hover:bg-[#3B82F6] hover:text-white transition-colors border border-gray-100"
-                                >
-                                    <Edit2 className="w-4 h-4" />
-                                </button>
-                                <button
-                                    onClick={() => handleDelete(staff.id)}
-                                    className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-50 text-gray-500 hover:bg-red-500 hover:text-white transition-colors border border-gray-100"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
-                            </div>
+                                <div className="flex items-center gap-1.5">
+                                    {sv.eligible ? (
+                                        <span className="text-sm font-black text-orange-600">
+                                            {sv.severancePay.toLocaleString()}원
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] font-bold text-gray-400">1년 미만</span>
+                                    )}
+                                    <ChevronRight className="w-3.5 h-3.5 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
+                                </div>
+                            </button>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
+            {/* 직원 편집 모달 */}
             {isEditing && (
                 <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
                     <div className="neo-card w-full max-w-sm bg-white p-8 border-none shadow-2xl my-auto">
@@ -156,6 +198,16 @@ export default function StaffPage() {
                                     placeholder="010-0000-0000"
                                     value={currentStaff.phone || ''}
                                     onChange={e => setCurrentStaff({ ...currentStaff, phone: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">입사일</label>
+                                <input
+                                    type="date"
+                                    className="neo-input w-full py-2.5"
+                                    value={currentStaff.startDate || ''}
+                                    onChange={e => setCurrentStaff({ ...currentStaff, startDate: e.target.value })}
                                 />
                             </div>
 
@@ -229,7 +281,7 @@ export default function StaffPage() {
                                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">색상</label>
                                 <div className="flex flex-wrap gap-2 pt-1">
                                     {[
-                                        '#EF4444', '#F97316', '#F59E0B', '#10B981', '#3B82F6', 
+                                        '#EF4444', '#F97316', '#F59E0B', '#10B981', '#3B82F6',
                                         '#6366F1', '#8B5CF6', '#EC4899'
                                     ].map(c => (
                                         <button
@@ -256,65 +308,25 @@ export default function StaffPage() {
                                         {new Date().getFullYear()} 법정 기준 자동 업데이트 중
                                     </div>
                                 </div>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex flex-col">
-                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">주휴수당</span>
+                                {[
+                                    { key: 'applyWeeklyAllowance', label: '주휴수당', color: 'peer-checked:bg-[#3B82F6]' },
+                                    { key: 'applyInsurances', label: '4대보험', color: 'peer-checked:bg-blue-600' },
+                                    { key: 'applyNightAllowance', label: '야간수당', color: 'peer-checked:bg-[#8B5CF6]' },
+                                    { key: 'applyHolidayAllowance', label: '휴일수당 (1.5배)', color: 'peer-checked:bg-pink-600' },
+                                ].map(({ key, label, color }) => (
+                                    <div key={key} className="flex items-center justify-between">
+                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">{label}</span>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={(currentStaff as any)[key] ?? false}
+                                                onChange={e => setCurrentStaff({ ...currentStaff, [key]: e.target.checked })}
+                                                className="sr-only peer"
+                                            />
+                                            <div className={`w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all ${color}`}></div>
+                                        </label>
                                     </div>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={currentStaff.applyWeeklyAllowance ?? false}
-                                            onChange={e => setCurrentStaff({ ...currentStaff, applyWeeklyAllowance: e.target.checked })}
-                                            className="sr-only peer"
-                                        />
-                                        <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#3B82F6]"></div>
-                                    </label>
-                                </div>
-
-                                <div className="flex items-center justify-between">
-                                    <div className="flex flex-col">
-                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">4대보험</span>
-                                    </div>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={currentStaff.applyInsurances ?? false}
-                                            onChange={e => setCurrentStaff({ ...currentStaff, applyInsurances: e.target.checked })}
-                                            className="sr-only peer"
-                                        />
-                                        <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                                    </label>
-                                </div>
-
-                                <div className="flex items-center justify-between">
-                                    <div className="flex flex-col">
-                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">야간수당</span>
-                                    </div>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={currentStaff.applyNightAllowance ?? false}
-                                            onChange={e => setCurrentStaff({ ...currentStaff, applyNightAllowance: e.target.checked })}
-                                            className="sr-only peer"
-                                        />
-                                        <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#8B5CF6]"></div>
-                                    </label>
-                                </div>
-
-                                <div className="flex items-center justify-between">
-                                    <div className="flex flex-col">
-                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">휴일수당 (1.5배)</span>
-                                    </div>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={currentStaff.applyHolidayAllowance ?? false}
-                                            onChange={e => setCurrentStaff({ ...currentStaff, applyHolidayAllowance: e.target.checked })}
-                                            className="sr-only peer"
-                                        />
-                                        <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-600"></div>
-                                    </label>
-                                </div>
+                                ))}
                             </div>
 
                             <button
@@ -334,6 +346,114 @@ export default function StaffPage() {
                                         <CheckCircle2 className="w-4 h-4" /> 저장 완료!
                                     </span>
                                 ) : '저장하기'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 퇴직금 계산기 모달 */}
+            {severanceStaff && severanceResult && (
+                <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+                    <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden my-auto animate-in zoom-in duration-200">
+                        {/* 헤더 */}
+                        <div className="bg-gradient-to-br from-amber-400 to-orange-500 p-6 relative">
+                            <button
+                                onClick={() => setSeveranceStaff(null)}
+                                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white hover:bg-white/30 transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                            <div className="flex items-center gap-2 mb-1">
+                                <Calculator className="w-5 h-5 text-white/80" />
+                                <p className="text-white/80 text-xs font-bold uppercase tracking-widest">퇴직금 계산기</p>
+                            </div>
+                            <h2 className="text-2xl font-black text-white">{severanceStaff.name}</h2>
+                            <p className="text-white/70 text-xs mt-1">근로자퇴직급여보장법 제8조 기준</p>
+                        </div>
+
+                        <div className="p-6 space-y-5">
+                            {/* 퇴직 예정일 선택 */}
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">퇴직 예정일</label>
+                                <input
+                                    type="date"
+                                    value={retirementDate}
+                                    onChange={e => {
+                                        setRetirementDate(e.target.value);
+                                        setSeveranceResult(computeSeverancePay(severanceStaff, e.target.value));
+                                    }}
+                                    className="neo-input w-full py-2.5"
+                                />
+                            </div>
+
+                            {/* 결과 */}
+                            {severanceResult.eligible ? (
+                                <>
+                                    {/* 퇴직금 메인 */}
+                                    <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 rounded-2xl p-5 text-center">
+                                        <p className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-1">예상 퇴직금</p>
+                                        <p className="text-3xl font-black text-orange-600">
+                                            {severanceResult.severancePay.toLocaleString()}
+                                            <span className="text-lg font-bold ml-1">원</span>
+                                        </p>
+                                    </div>
+
+                                    {/* 계산 근거 */}
+                                    <div className="space-y-2.5 bg-gray-50 rounded-2xl p-4">
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">계산 근거</p>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-500">입사일</span>
+                                            <span className="font-bold text-gray-900">{severanceStaff.startDate}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-500">재직일수</span>
+                                            <span className="font-bold text-gray-900">{severanceResult.workingDays.toLocaleString()}일 ({severanceResult.workingYears.toFixed(2)}년)</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-500">최근 3개월 임금</span>
+                                            <span className="font-bold text-gray-900">{severanceResult.last3MonthsWage.toLocaleString()}원</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-500">최근 3개월 일수</span>
+                                            <span className="font-bold text-gray-900">{severanceResult.last3MonthsDays}일</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm border-t border-gray-200 pt-2 mt-1">
+                                            <span className="text-gray-500">1일 평균임금</span>
+                                            <span className="font-bold text-blue-600">{severanceResult.avgDailyWage.toLocaleString()}원</span>
+                                        </div>
+                                    </div>
+
+                                    {/* 공식 */}
+                                    <div className="bg-blue-50 rounded-xl p-3 text-center">
+                                        <p className="text-[10px] font-bold text-blue-400 tracking-wide">
+                                            {severanceResult.avgDailyWage.toLocaleString()}원 × 30일 × ({severanceResult.workingDays}일 ÷ 365)
+                                        </p>
+                                        <p className="text-[10px] text-blue-300 mt-0.5">= {severanceResult.severancePay.toLocaleString()}원</p>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex flex-col items-center gap-3 py-6 text-center">
+                                    <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center">
+                                        <AlertCircle className="w-7 h-7 text-gray-400" />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-gray-700">퇴직금 미발생</p>
+                                        <p className="text-sm text-gray-400 mt-1">{severanceResult.ineligibleReason}</p>
+                                        <p className="text-xs text-gray-300 mt-2">계속 근무 시 1년 달성 후 퇴직금 발생</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            <p className="text-[9px] text-gray-300 text-center leading-relaxed">
+                                ※ 본 계산은 참고용입니다. 실제 퇴직금은 근무 형태, 수당 구성 등에 따라 달라질 수 있으며 공인 노무사 확인을 권장합니다.
+                            </p>
+
+                            <button
+                                onClick={() => setSeveranceStaff(null)}
+                                className="neo-btn neo-btn-primary w-full py-3 font-bold"
+                            >
+                                확인
                             </button>
                         </div>
                     </div>

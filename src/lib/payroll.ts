@@ -254,3 +254,87 @@ export const computeMonthlyHistory = (count: number): MonthlyHistory[] => {
 
     return history;
 };
+
+// ──────────────────────────────────────────────
+// 퇴직금 계산 (근로자퇴직급여보장법 제8조 기준)
+// 퇴직금 = 평균임금 × 30 × (재직일수 / 365)
+// 평균임금 = 최근 3개월 임금 총액 / 최근 3개월 총 일수
+// ──────────────────────────────────────────────
+export interface SeveranceResult {
+    eligible: boolean;            // 퇴직금 지급 대상 여부
+    workingDays: number;          // 재직일수
+    workingYears: number;         // 근속연수 (소수점)
+    avgDailyWage: number;         // 평균임금 (1일)
+    severancePay: number;         // 퇴직금
+    ineligibleReason?: string;    // 미해당 사유
+    last3MonthsWage: number;      // 최근 3개월 임금 총액
+    last3MonthsDays: number;      // 최근 3개월 총 일수
+}
+
+export const computeSeverancePay = (
+    staff: Staff,
+    retirementDate: string = format(new Date(), 'yyyy-MM-dd')
+): SeveranceResult => {
+    if (!staff.startDate) {
+        return { eligible: false, workingDays: 0, workingYears: 0, avgDailyWage: 0, severancePay: 0, ineligibleReason: '입사일 정보 없음', last3MonthsWage: 0, last3MonthsDays: 0 };
+    }
+
+    const startDate = new Date(staff.startDate);
+    const endDate = new Date(retirementDate);
+
+    // 재직일수 계산
+    const workingDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    const workingYears = workingDays / 365;
+
+    // 1년 미만이면 퇴직금 미발생
+    if (workingDays < 365) {
+        return {
+            eligible: false, workingDays, workingYears, avgDailyWage: 0, severancePay: 0,
+            ineligibleReason: `재직기간 ${workingDays}일 (1년 미만 - 퇴직금 발생 안 됨)`,
+            last3MonthsWage: 0, last3MonthsDays: 0
+        };
+    }
+
+    const allAttendance = getAttendance();
+    const settings = getSettings();
+
+    // 최근 3개월 임금 총액 계산
+    let last3MonthsWage = 0;
+    let last3MonthsDays = 0;
+
+    for (let i = 1; i <= 3; i++) {
+        const targetDate = subMonths(endDate, i);
+        const monthKey = format(targetDate, 'yyyy-MM');
+        // 해당 월의 달력 일수 (28~31일)
+        const daysInMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).getDate();
+        last3MonthsDays += daysInMonth;
+
+        const monthRecords = allAttendance.filter(r => r.staffId === staff.id && r.date.startsWith(monthKey));
+        const item = computePayrollItem(staff, monthRecords, settings, []);
+        last3MonthsWage += item.basePay + item.overtimePay + item.weeklyAllowancePay + item.nightShiftPay;
+    }
+
+    // 월급제인 경우 실제 근태 기록 없어도 월급 × 3으로 계산
+    if (staff.salaryType === 'monthly' && last3MonthsWage === 0 && staff.monthlySalary) {
+        last3MonthsWage = (staff.monthlySalary || 0) * 3;
+        last3MonthsDays = 92; // 3개월 평균 일수
+    }
+
+    // 평균임금이 최저임금보다 낮으면 최저임금 적용 (근기법 제2조)
+    const minWage = getMinWage(endDate);
+    const avgDailyWageRaw = last3MonthsDays > 0 ? last3MonthsWage / last3MonthsDays : 0;
+    const avgDailyWage = Math.max(avgDailyWageRaw, minWage * 8); // 최저임금 기준 1일 8시간
+
+    // 퇴직금 = 평균임금 × 30 × (재직일수 / 365)
+    const severancePay = Math.floor(avgDailyWage * 30 * (workingDays / 365));
+
+    return {
+        eligible: true,
+        workingDays,
+        workingYears,
+        avgDailyWage: Math.floor(avgDailyWage),
+        severancePay,
+        last3MonthsWage: Math.floor(last3MonthsWage),
+        last3MonthsDays,
+    };
+};
