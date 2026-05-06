@@ -11,7 +11,8 @@ import {
     Store,
     ChevronDown,
     ArrowUpRight,
-    ArrowDownRight
+    ArrowDownRight,
+    Pencil
 } from 'lucide-react';
 import { format, startOfMonth, subMonths } from 'date-fns';
 import { getStaff, getSettings, saveSettings } from '../lib/storage';
@@ -57,21 +58,26 @@ export default function Home() {
                 >
                     <Store className="text-[#8B5CF6] dark:text-blue-400 w-6 h-6" />
                 </div>
-                <div>
-                    <h1
-                        className="text-xl font-bold text-gray-900 dark:text-gray-100 tracking-tight cursor-pointer hover:text-[#3B82F6] dark:hover:text-blue-400 transition-colors"
-                        onClick={() => {
-                            const name = prompt(t.homeStorePrompt, storeName);
-                            if (name) {
-                                setStoreName(name);
-                                const settings = getSettings();
-                                saveSettings({ ...settings, shopName: name });
-                                syncToCloud();
-                            }
-                        }}
-                    >
+                <div
+                    className="flex flex-col items-center gap-1 cursor-pointer group"
+                    onClick={() => {
+                        const name = prompt(t.homeStorePrompt, storeName);
+                        if (name) {
+                            setStoreName(name);
+                            const settings = getSettings();
+                            saveSettings({ ...settings, shopName: name });
+                            syncToCloud();
+                        }
+                    }}
+                >
+                    <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 tracking-tight group-hover:text-[#3B82F6] dark:group-hover:text-blue-400 transition-colors">
                         {storeName}
                     </h1>
+                    {/* 수정 힌트 */}
+                    <div className="flex items-center gap-1 text-gray-300 dark:text-gray-600 group-hover:text-[#3B82F6] dark:group-hover:text-blue-400 transition-colors">
+                        <Pencil className="w-2.5 h-2.5" />
+                        <span className="text-[9px] font-semibold tracking-wide">탭하여 가게 이름 수정</span>
+                    </div>
                 </div>
             </div>
 
