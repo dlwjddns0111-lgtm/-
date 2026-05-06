@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { signInWithGoogle, login as saveUser } from '../lib/auth';
-import { syncFromCloud } from '../lib/sync';
+import { syncFromCloud, syncToCloud } from '../lib/sync';
 import { ShieldCheck } from 'lucide-react';
 
 export default function LoginPage({ onLogin }: { onLogin: () => void }) {
@@ -43,6 +43,8 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
                     const kakaoAccount = userData.kakao_account || {};
                     const profile = kakaoAccount.profile || {};
 
+                    // user.id는 항상 'kakao:숫자ID' 형식으로 고정
+                    // → 어느 기기에서 로그인해도 동일한 Firebase 경로 사용
                     const user = {
                         id: `kakao:${userData.id}`,
                         email: kakaoAccount.email || `kakao_${userData.id}@payroll.app`,
@@ -50,7 +52,9 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
                         photoUrl: profile.profile_image_url || '',
                     };
 
+                    console.log('[LOGIN] 카카오 로그인 성공 | Firebase Key: kakao_' + userData.id);
                     saveUser(user);
+                    // 로그인 후 클라우드 동기화 (타임스탬프 기반으로 방향 결정)
                     await syncFromCloud();
                     onLogin();
                 } catch (error) {
